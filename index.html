@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Dashboard</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #f5f5f5;
+            color: #333;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .dashboard {
+            display: flex;
+            height: 100vh;
+            padding: 20px;
+            gap: 20px;
+        }
+
+        .section {
+            flex: 1;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 500;
+            color: #444;
+        }
+
+        .section-content {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .event-item, .task-item {
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            background-color: #f9f9f9;
+            border-left: 4px solid #4285f4;
+        }
+
+        .event-item {
+            border-left-color: #4285f4;
+        }
+
+        .task-item {
+            border-left-color: #34a853;
+            display: flex;
+            align-items: center;
+        }
+
+        .task-item.completed {
+            border-left-color: #9e9e9e;
+            opacity: 0.7;
+        }
+
+        .task-checkbox {
+            margin-right: 10px;
+        }
+
+        .task-text {
+            flex: 1;
+        }
+
+        .task-item.completed .task-text {
+            text-decoration: line-through;
+            color: #888;
+        }
+
+        .event-title, .task-title {
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .event-time, .task-due {
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .event-location {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .login-prompt {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            text-align: center;
+        }
+
+        .login-button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        .login-button:hover {
+            background-color: #3367d6;
+        }
+
+        .refresh-button {
+            background: none;
+            border: none;
+            color: #4285f4;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .status-indicator {
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #4285f4;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .time-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            margin: 20px 0 10px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+
+        .time-label:first-child {
+            margin-top: 0;
+        }
+
+        /* Notes section redesign */
+        .notes-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .notes-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column-reverse; /* Most recent first */
+            padding-bottom: 10px;
+        }
+
+        .note-item {
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            background-color: #f0f7ff;
+            border-left: 4px solid #4285f4;
+            position: relative;
+        }
+
+        .note-timestamp {
+            font-size: 0.7rem;
+            color: #999;
+            margin-bottom: 3px;
+        }
+
+        .note-content {
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .note-content p {
+            margin-bottom: 0.5em;
+        }
+
+        .note-content p:last-child {
+            margin-bottom: 0;
+        }
+
+        .note-actions {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            display: none;
+        }
+
+        .note-item:hover .note-actions {
+            display: flex;
+        }
+
+        .note-action-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            margin-left: 5px;
+            color: #777;
+            font-size: 0.9rem;
+            padding: 2px;
+        }
+
+        .note-action-btn:hover {
+            color: #4285f4;
+        }
+
+        .note-input-container {
+            margin-top: 10px;
+            display: flex;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+
+        .note-input {
+            flex: 1;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            font-size: 0.95rem;
+            resize: none;
+            height: 40px;
+            max-height: 120px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .note-input:focus {
+            border-color: #4285f4;
+        }
+
+        .note-send-btn {
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 0 15px;
+            margin-left: 10px;
+            cursor: pointer;
+            height: 40px;
+        }
+
+        .note-send-btn:hover {
+            background-color: #3367d6;
+        }
+
+        .note-edit-area {
+            width: 100%;
+            border: 1px solid #4285f4;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 5px;
+            font-size: 0.95rem;
+            resize: none;
+            outline: none;
+            height: 80px;
+        }
+
+        .note-edit-buttons {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 5px;
+        }
+
+        .note-edit-btn, .note-cancel-btn {
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            margin-left: 5px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .note-edit-btn {
+            background-color: #4285f4;
+            color: white;
+        }
+
+        .note-cancel-btn {
+            background-color: #f5f5f5;
+            color: #555;
+        }
+
+        /* Clock styles */
+        .clock-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #444;
+            z-index: 10;
+            background-color: rgba(255, 255, 255, 0.7);
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+
+        /* Weather styles */
+        .weather-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            background-color: rgba(255, 255, 255, 0.7);
+            padding: 5px 10px;
+            border-radius: 4px;
+            z-index: 10;
+        }
+
+        .weather-icon {
+            width: 40px;
+            height: 40px;
+            margin-right: 10px;
+        }
+
+        .weather-details {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .weather-temp {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #444;
+        }
+
+        .weather-desc {
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        /* Dark mode */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #1e1e1e;
+                color: #e0e0e0;
+            }
+
+            .section {
+                background-color: #2d2d2d;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            }
+
+            .section-title {
+                color: #e0e0e0;
+            }
+
+            .section-header {
+                border-bottom: 1px solid #444;
+            }
+
+            .event-item, .task-item {
+                background-color: #3d3d3d;
+                color: #e0e0e0;
+            }
+
+            .event-time, .task-due, .event-location {
+                color: #aaa;
+            }
+
+            .task-item.completed .task-text {
+                color: #999;
+            }
+
+            .time-label {
+                color: #bbb;
+                border-bottom: 1px solid #444;
+            }
+
+            .note-item {
+                background-color: #3d3d3d;
+                border-left-color: #5c9eff;
+            }
+
+            .note-input {
+                background-color: #3d3d3d;
+                border-color: #555;
+                color: #e0e0e0;
+            }
+
+            .note-input-container {
+                border-top-color: #444;
+            }
+
+            .note-action-btn {
+                color: #aaa;
+            }
+
+            .note-action-btn:hover {
+                color: #5c9eff;
+            }
+
+            .note-edit-area {
+                background-color: #3d3d3d;
+                border-color: #5c9eff;
+                color: #e0e0e0;
+            }
+
+            .note-cancel-btn {
+                background-color: #444;
+                color: #ddd;
+            }
+
+            .clock-container {
+                color: #e0e0e0;
+                background-color: rgba(45, 45, 45, 0.7);
+            }
+
+            .weather-container {
+                background-color: rgba(45, 45, 45, 0.7);
+            }
+
+            .weather-temp {
+                color: #e0e0e0;
+            }
+
+            .weather-desc {
+                color: #aaa;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Clock widget -->
+    <div class="clock-container" id="clock">00:00:00</div>
+    
+    <!-- Weather widget -->
+    <div class="weather-container" id="weather">
+        <div id="weather-loading">Loading weather...</div>
+    </div>
+
+    <div class="dashboard">
+        <div class="section" id="calendar-section">
+            <div class="section-header">
+                <h2 class="section-title">Calendar</h2>
+                <button class="refresh-button" id="refresh-calendar">Refresh</button>
+            </div>
+            <div class="section-content" id="calendar-content">
+                <div class="login-prompt" id="calendar-login-prompt">
+                    <p>Sign in to view your Google Calendar events</p>
+                    <button class="login-button" id="authorize-calendar">Sign In</button>
+                </div>
+            </div>
+            <div class="status-indicator" id="calendar-status"></div>
+        </div>
+
+        <div class="section" id="tasks-section">
+            <div class="section-header">
+                <h2 class="section-title">Tasks</h2>
+                <button class="refresh-button" id="refresh-tasks">Refresh</button>
+            </div>
+            <div class="section-content" id="tasks-content">
+                <div class="login-prompt" id="tasks-login-prompt">
+                    <p>Sign in to view your Google Tasks</p>
+                    <button class="login-button" id="authorize-tasks">Sign In</button>
+                </div>
+            </div>
+            <div class="status-indicator" id="tasks-status"></div>
+        </div>
+
+        <div class="section" id="notes-section">
+            <div class="section-header">
+                <h2 class="section-title">Notes</h2>
+                <span></span>
+            </div>
+            <div class="notes-container">
+                <div class="section-content notes-list" id="notes-list">
+                    <!-- Notes will be added here dynamically -->
+                </div>
+                <div class="note-input-container">
+                    <textarea class="note-input" id="note-input" placeholder="Type a note (supports Markdown)..."></textarea>
+                    <button class="note-send-btn" id="note-send">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import marked.js for Markdown parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+
+    <script>
+        // API Configuration and OAuth settings
+        const CLIENT_ID = 'YOUR_GOOGLE_API_CLIENT_ID';
+        const API_KEY = 'YOUR_GOOGLE_API_KEY';
+        const WEATHER_API_KEY = 'YOUR_OPENWEATHERMAP_API_KEY';
+        const WEATHER_LOCATION = 'Singapore'; // Default location
+        
+        // Discovery docs and scopes for Calendar and Tasks
+        const DISCOVERY_DOCS = [
+            'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest',
+            'https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest'
+        ];
+        
+        const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/tasks.readonly';
+        
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+        let calendarAuthorized = false;
+        let tasksAuthorized = false;
+        let refreshInterval;
+        let weatherRefreshInterval;
+        
+        // Load the Google API client library
+        document.addEventListener('DOMContentLoaded', () => {
+            // Load the Google API client library
+            const script1 = document.createElement('script');
+            script1.src = 'https://apis.google.com/js/api.js';
+            script1.onload = gapiLoaded;
+            document.body.appendChild(script1);
+            
+            // Load the Google Identity Services library
+            const script2 = document.createElement('script');
+            script2.src = 'https://accounts.google.com/gsi/client';
+            script2.onload = gisLoaded;
+            document.body.appendChild(script2);
+            
+            // Set up notes functionality
+            setupNotes();
+            
+            // Set up clock
+            setupClock();
+            
+            // Set up weather
+            setupWeather();
+            
+            // Add event listeners for refresh buttons
+            document.getElementById('refresh-calendar').addEventListener('click', () => {
+                if (calendarAuthorized) {
+                    listCalendarEvents();
+                }
+            });
+            
+            document.getElementById('refresh-tasks').addEventListener('click', () => {
+                if (tasksAuthorized) {
+                    listTasks();
+                }
+            });
+            
+            // Set up the automatic refresh interval (every 5 minutes)
+            setupAutoRefresh();
+        });
+        
+        // Initialize the Google API client library
+        function gapiLoaded() {
+            gapi.load('client', initializeGapiClient);
+        }
+        
+        // Initialize the Google API client with your API key and discovery docs
+        async function initializeGapiClient() {
+            await gapi.client.init({
+                apiKey: API_KEY,
+                discoveryDocs: DISCOVERY_DOCS,
+            });
+            gapiInited = true;
+            maybeEnableButtons();
+        }
+        
+        // Initialize the Google Identity Services client
+        function gisLoaded() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: '', // Will be set later
+            });
+            gisInited = true;
+            maybeEnableButtons();
+        }
+        
+        // Enable the authorize buttons if both API clients are initialized
+        function maybeEnableButtons() {
+            if (gapiInited && gisInited) {
+                document.getElementById('authorize-calendar').onclick = handleCalendarAuthClick;
+                document.getElementById('authorize-tasks').onclick = handleTasksAuthClick;
+                
+                // Check if we have a token in local storage
+                const token = localStorage.getItem('gapi_token');
+                if (token) {
+                    // Try to use the stored token
+                    try {
+                        gapi.client.setToken(JSON.parse(token));
+                        handleCalendarAuthSuccess();
+                        handleTasksAuthSuccess();
+                    } catch (err) {
+                        console.error('Error setting stored token:', err);
+                        localStorage.removeItem('gapi_token');
+                    }
+                }
+            }
+        }
+        
+        // Handle authorization for Calendar
+        function handleCalendarAuthClick() {
+            tokenClient.callback = async (resp) => {
+                if (resp.error !== undefined) {
+                    throw resp;
+                }
+                // Store the token in local storage
+                localStorage.setItem('gapi_token', JSON.stringify(gapi.client.getToken()));
+                handleCalendarAuthSuccess();
+                handleTasksAuthSuccess(); // Both APIs use the same token
+            };
+            
+            if (gapi.client.getToken() === null) {
+                tokenClient.requestAccessToken({ prompt: 'consent' });
+            } else {
+                tokenClient.requestAccessToken({ prompt: '' });
+            }
+        }
+        
+        // Handle authorization for Tasks
+        function handleTasksAuthClick() {
+            tokenClient.callback = async (resp) => {
+                if (resp.error !== undefined) {
+                    throw resp;
+                }
+                // Store the token in local storage
+                localStorage.setItem('gapi_token', JSON.stringify(gapi.client.getToken()));
+                handleCalendarAuthSuccess(); // Both APIs use the same token
+                handleTasksAuthSuccess();
+            };
+            
+            if (gapi.client.getToken() === null) {
+                tokenClient.requestAccessToken({ prompt: 'consent' });
+            } else {
+                tokenClient.requestAccessToken({ prompt: '' });
+            }
+        }
+        
+        // Handle successful Calendar authorization
+        function handleCalendarAuthSuccess() {
+            calendarAuthorized = true;
+            document.getElementById('calendar-login-prompt').classList.add('hidden');
+            listCalendarEvents();
+        }
+        
+        // Handle successful Tasks authorization
+        function handleTasksAuthSuccess() {
+            tasksAuthorized = true;
+            document.getElementById('tasks-login-prompt').classList.add('hidden');
+            listTasks();
+        }
+        
+        // Set up local storage for notes and UI handling
+        function setupNotes() {
+            const notesList = document.getElementById('notes-list');
+            const noteInput = document.getElementById('note-input');
+            const noteSendBtn = document.getElementById('note-send');
+            
+            // Load saved notes from local storage
+            loadNotes();
+            
+            // Send note when pressing Enter (not with Shift key)
+            noteInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    addNote();
+                }
+            });
+            
+            // Send note when clicking the Send button
+            noteSendBtn.addEventListener('click', addNote);
+            
+            // Handle auto-resize of the textarea
+            noteInput.addEventListener('input', () => {
+                noteInput.style.height = 'auto';
+                noteInput.style.height = Math.min(noteInput.scrollHeight, 120) + 'px';
+            });
+            
+            // Function to add a new note
+            function addNote() {
+                const content = noteInput.value.trim();
+                if (!content) return;
+                
+                // Create a new note object
+                const note = {
+                    id: Date.now(),
+                    content: content,
+                    timestamp: new Date().toISOString()
+                };
+                
+                // Add to local storage
+                const notes = getNotes();
+                notes.unshift(note); // Add to beginning (most recent first)
+                saveNotes(notes);
+                
+                // Clear input
+                noteInput.value = '';
+                noteInput.style.height = '40px';
+                
+                // Refresh notes display
+                loadNotes();
+            }
+            
+            // Function to load notes from local storage
+            function loadNotes() {
+                const notes = getNotes();
+                notesList.innerHTML = '';
+                
+                if (notes.length === 0) {
+                    notesList.innerHTML = '<div class="note-item" style="opacity: 0.7; text-align: center;">No notes yet. Type something to get started!</div>';
+                    return;
+                }
+                
+                notes.forEach(note => {
+                    const noteElement = document.createElement('div');
+                    noteElement.className = 'note-item';
+                    noteElement.dataset.id = note.id;
+                    
+                    const formattedDate = new Date(note.timestamp).toLocaleString();
+                    
+                    noteElement.innerHTML = `
+                        <div class="note-timestamp">${formattedDate}</div>
+                        <div class="note-content">${marked.parse(note.content)}</div>
+                        <div class="note-actions">
+                            <button class="note-action-btn edit-note">✏️</button>
+                            <button class="note-action-btn delete-note">🗑️</button>
+                        </div>
+                    `;
+                    
+                    notesList.appendChild(noteElement);
+                });
+                
+                // Add event listeners for edit and delete buttons
+                document.querySelectorAll('.edit-note').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const noteElement = e.target.closest('.note-item');
+                        const noteId = parseInt(noteElement.dataset.id);
+                        const note = getNotes().find(n => n.id === noteId);
+                        
+                        if (!note) return;
+                        
+                        // Store the original content for cancel action
+                        const originalContent = noteElement.querySelector('.note-content').innerHTML;
+                        
+                        // Create edit mode interface
+                        const editArea = document.createElement('div');
+                        editArea.className = 'note-edit';
+                        editArea.innerHTML = `
+                            <textarea class="note-edit-area">${note.content}</textarea>
+                            <div class="note-edit-buttons">
+                                <button class="note-cancel-btn">Cancel</button>
+                                <button class="note-edit-btn">Save</button>
+                            </div>
+                        `;
+                        
+                        // Replace content with edit area
+                        noteElement.querySelector('.note-content').replaceWith(editArea);
+                        noteElement.querySelector('.note-actions').style.display = 'none';
+                        
+                        // Focus on textarea
+                        const textarea = noteElement.querySelector('.note-edit-area');
+                        textarea.focus();
+                        
+                        // Add event listeners for save and cancel
+                        noteElement.querySelector('.note-edit-btn').addEventListener('click', () => {
+                            saveEditedNote(noteId, textarea.value);
+                        });
+                        
+                        noteElement.querySelector('.note-cancel-btn').addEventListener('click', () => {
+                            // Restore original content
+                            const contentDiv = document.createElement('div');
+                            contentDiv.className = 'note-content';
+                            contentDiv.innerHTML = originalContent;
+                            editArea.replaceWith(contentDiv);
+                            noteElement.querySelector('.note-actions').style.display = '';
+                        });
+                    });
+                });
+                
+                document.querySelectorAll('.delete-note').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const noteElement = e.target.closest('.note-item');
+                        const noteId = parseInt(noteElement.dataset.id);
+                        
+                        // Remove from DOM with animation
+                        noteElement.style.opacity = '0';
+                        noteElement.style.height = '0';
+                        noteElement.style.margin = '0';
+                        noteElement.style.padding = '0';
+                        noteElement.style.overflow = 'hidden';
+                        noteElement.style.transition = 'all 0.3s ease';
+                        
+                        // Delete from storage and refresh after animation
+                        setTimeout(() => {
+                            deleteNote(noteId);
+                        }, 300);
+                    });
+                });
+            }
+            
+            // Function to save edited note
+            function saveEditedNote(noteId, newContent) {
+                const notes = getNotes();
+                const noteIndex = notes.findIndex(n => n.id === noteId);
+                
+                if (noteIndex === -1) return;
+                
+                notes[noteIndex].content = newContent;
+                saveNotes(notes);
+                loadNotes();
+            }
+            
+            // Function to delete a note
+            function deleteNote(noteId) {
+                const notes = getNotes().filter(note => note.id !== noteId);
+                saveNotes(notes);
+                loadNotes();
+            }
+            
+            // Helper function to get notes from local storage
+            function getNotes() {
+                const notesStr = localStorage.getItem('dashboard_notes');
+                return notesStr ? JSON.parse(notesStr) : [];
+            }
+            
+            // Helper function to save notes to local storage
+            function saveNotes(notes) {
+                localStorage.setItem('dashboard_notes', JSON.stringify(notes));
+            }
+        }
+        
+        // Set up clock functionality
+        function setupClock() {
+            const clockElement = document.getElementById('clock');
+            
+            function updateClock() {
+                const now = new Date();
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                
+                clockElement.textContent = `${hours}:${minutes}:${seconds}`;
+            }
+            
+            // Update immediately
+            updateClock();
+            
+            // Update every second
+            setInterval(updateClock, 1000);
+        }
+        
+        // Set up weather functionality
+        function setupWeather() {
+            const weatherContainer = document.getElementById('weather');
+            
+            // Try to get user's location
+            function getLocation() {
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        position => {
+                            fetchWeatherByCoords(position.coords.latitude, position.coords.longitude);
+                        },
+                        error => {
+                            console.log('Geolocation error:', error);
+                            fetchWeatherByCity(WEATHER_LOCATION);
+                        }
+                    );
+                } else {
+                    fetchWeatherByCity(WEATHER_LOCATION);
+                }
+            }
+            
+            // Fetch weather by coordinates
+            function fetchWeatherByCoords(lat, lon) {
+                const lastWeatherUpdate = localStorage.getItem('last_weather_update');
+                const cachedWeather = localStorage.getItem('cached_weather');
+                
+                // Check if we have cached weather data less than 10 minutes old
+                if (lastWeatherUpdate && cachedWeather) {
+                    const updateTime = parseInt(lastWeatherUpdate);
+                    const currentTime = Date.now();
+                    
+                    // If cache is less than 10 minutes old (600000 ms)
+                    if (currentTime - updateTime < 600000) {
+                        displayWeather(JSON.parse(cachedWeather));
+                        return;
+                    }
+                }
+                
+                fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${WEATHER_API_KEY}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        displayWeather(data);
+                        
+                        // Cache the weather data
+                        localStorage.setItem('cached_weather', JSON.stringify(data));
+                        localStorage.setItem('last_weather_update', Date.now().toString());
+                    })
+                    .catch(error => {
+                        console.error('Error fetching weather:', error);
+                        weatherContainer.innerHTML = `<div>Weather unavailable</div>`;
+                        
+                        // If there's cached data, use it even if it's old
+                        if (cachedWeather) {
+                            displayWeather(JSON.parse(cachedWeather));
+                        }
+                    });
+            }
+            
+            // Fetch weather by city name
+            function fetchWeatherByCity(city) {
+                const lastWeatherUpdate = localStorage.getItem('last_weather_update');
+                const cachedWeather = localStorage.getItem('cached_weather');
+                
+                // Check if we have cached weather data less than 10 minutes old
+                if (lastWeatherUpdate && cachedWeather) {
+                    const updateTime = parseInt(lastWeatherUpdate);
+                    const currentTime = Date.now();
+                    
+                    // If cache is less than 10 minutes old (600000 ms)
+                    if (currentTime - updateTime < 600000) {
+                        displayWeather(JSON.parse(cachedWeather));
+                        return;
+                    }
+                }
+                
+                fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid=${WEATHER_API_KEY}`)
+                    .
