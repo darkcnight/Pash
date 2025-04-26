@@ -19,3 +19,7 @@ Thumbs.db
 
 # Optional: Ignore environment files if you use them later
 .env
+
+# Local working folders
+Testing/
+Archive/
