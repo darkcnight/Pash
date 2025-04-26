@@ -1,0 +1,21 @@
+# Ignore Node.js modules (if you install npm packages later)
+node_modules/
+
+# Ignore Electron build output
+dist/
+build/
+
+# Ignore macOS system files (if you ever use a Mac)
+.DS_Store
+
+# Ignore Windows system files
+Thumbs.db
+
+# Ignore log files
+*.log
+
+# Ignore temporary files
+*.tmp
+
+# Optional: Ignore environment files if you use them later
+.env
