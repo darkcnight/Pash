@@ -13,7 +13,7 @@ Say goodbye to constantly switching between apps to check your schedule, tasks, 
 Perfect for professionals working from home, productivity enthusiasts, or anyone who wants to streamline their digital workspace.
 
 ![Pash Dashboard Screenshot](https://github.com/darkcnight/Pash/raw/main/screenshots/dashboard.png)
-*[Add a screenshot of your dashboard here!]*
+<!-- *[Add a screenshot of your dashboard here!]* -->
 
 ## Key Features
 
@@ -33,13 +33,15 @@ Perfect for professionals working from home, productivity enthusiasts, or anyone
 
 ## Screenshots
 
-*[Place additional screenshots of your app here!]*
+<!-- *[Place additional screenshots of your app here!]* -->
 
+<!-- 
 - Dashboard overview
 - Dark mode
 - Notes section
 - Calendar and tasks
 - Settings panel
+-->
 
 ---
 
@@ -127,4 +129,4 @@ MIT License (Coming Soon)
 
 ---
 
-*Made with ❤️ by the Pash team*
+*Made with ❤️ by the Darkcnight and Cursor*
