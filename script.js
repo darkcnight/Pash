@@ -7,7 +7,8 @@ let CONFIG = {
     TIMEZONE: 'Asia/Singapore',
     DASHBOARD_TITLE: 'Pash',
     THEME: 'light', // 'light' or 'dark'
-    SHOW_DATE: false // Whether to show date with the time
+    SHOW_DATE: false, // Whether to show date with the time
+    SHOW_WEATHER: true // Whether to show weather in the header
 };
 
 // Load settings from localStorage if available
@@ -33,6 +34,14 @@ function loadSettings() {
             // Apply date toggle setting
             if (CONFIG.SHOW_DATE === true && document.getElementById('date-toggle')) {
                 document.getElementById('date-toggle').checked = true;
+            }
+            
+            // Apply weather toggle setting
+            if (CONFIG.SHOW_WEATHER === false && document.getElementById('weather-toggle')) {
+                document.getElementById('weather-toggle').checked = false;
+                toggleWeatherDisplay(false);
+            } else {
+                toggleWeatherDisplay(true);
             }
         } catch (err) {
             console.error('Error parsing saved settings:', err);
@@ -105,14 +114,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Set up clock (with timezone support)
     setupClock();
     
-    // Only attempt to load APIs if keys are provided
-    if (CONFIG.WEATHER_API_KEY) {
+    // Only attempt to load APIs if keys are provided and weather is enabled
+    if (CONFIG.WEATHER_API_KEY && CONFIG.SHOW_WEATHER !== false) {
         // Set up weather
         setupWeather();
-    } else {
+    } else if (!CONFIG.WEATHER_API_KEY && CONFIG.SHOW_WEATHER !== false) {
         document.getElementById('weather').innerHTML = `
             <div>Weather API key not configured</div>
         `;
+    }
+    
+    // If weather should be hidden, apply that now
+    if (CONFIG.SHOW_WEATHER === false) {
+        toggleWeatherDisplay(false);
     }
     
     // Only attempt to load Google APIs if keys are provided
@@ -373,6 +387,8 @@ function setupSettingsModal() {
     timezoneSelect.value = CONFIG.TIMEZONE || 'Asia/Singapore';
     themeToggle.checked = CONFIG.THEME === 'dark';
     dateToggle.checked = CONFIG.SHOW_DATE === true;
+    const weatherToggle = document.getElementById('weather-toggle');
+    weatherToggle.checked = CONFIG.SHOW_WEATHER !== false; // Default to true if not explicitly set to false
     
     // Show the modal when settings button is clicked
     settingsButton.addEventListener('click', () => {
@@ -413,6 +429,14 @@ function setupSettingsModal() {
         setupClock();
     });
     
+    // Toggle weather display when weather toggle is clicked
+    weatherToggle.addEventListener('change', () => {
+        CONFIG.SHOW_WEATHER = weatherToggle.checked;
+        saveSettings({ SHOW_WEATHER: CONFIG.SHOW_WEATHER });
+        // Update the weather display immediately
+        toggleWeatherDisplay(CONFIG.SHOW_WEATHER);
+    });
+    
     // Save settings when save button is clicked
     saveButton.addEventListener('click', () => {
         const settings = {
@@ -421,7 +445,8 @@ function setupSettingsModal() {
             WEATHER_API_KEY: weatherApiKeyInput.value.trim(),
             TIMEZONE: timezoneSelect.value,
             THEME: themeToggle.checked ? 'dark' : 'light',
-            SHOW_DATE: dateToggle.checked
+            SHOW_DATE: dateToggle.checked,
+            SHOW_WEATHER: weatherToggle.checked
         };
         
         saveSettings(settings);
@@ -589,6 +614,8 @@ function setupNotes() {
             return;
         }
         
+        // Loop through notes - since we switched to column layout (not column-reverse),
+        // we need to add newer notes to the top of the list
         notes.forEach(note => {
             const noteElement = document.createElement('div');
             noteElement.className = 'note-item';
@@ -623,7 +650,12 @@ function setupNotes() {
                 </div>
             `;
             
-            notesList.appendChild(noteElement);
+            // Insert at the beginning of the list to maintain most recent first
+            if (notesList.firstChild) {
+                notesList.insertBefore(noteElement, notesList.firstChild);
+            } else {
+                notesList.appendChild(noteElement);
+            }
         });
         
         // Add event listeners for edit and delete buttons
@@ -1242,5 +1274,19 @@ function displayTasks(tasks) {
     } catch (error) {
         console.error('Error displaying tasks:', error);
         showError('tasks-section', 'Tasks Display Error', 'Failed to display tasks due to an error.');
+    }
+}
+
+// Function to toggle weather display and adjust header layout
+function toggleWeatherDisplay(show) {
+    const weatherContainer = document.getElementById('weather');
+    const dashboardTitle = document.querySelector('.dashboard-title-container');
+    
+    if (show) {
+        weatherContainer.style.display = 'flex';
+        dashboardTitle.classList.remove('title-left');
+    } else {
+        weatherContainer.style.display = 'none';
+        dashboardTitle.classList.add('title-left');
     }
 } 

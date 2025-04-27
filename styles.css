@@ -264,8 +264,9 @@ body {
     flex: 1;
     overflow-y: auto;
     display: flex;
-    flex-direction: column-reverse; /* Most recent first */
-    padding-bottom: 10px;
+    flex-direction: column;
+    padding-top: 10px;
+    padding-right: 5px;
 }
 
 .note-item {
@@ -737,4 +738,11 @@ input:checked + .slider:before {
 
 .help-dialog-close:hover {
     color: var(--text-color);
+}
+
+/* Style for title when weather is hidden */
+.title-left {
+    margin-left: 0;
+    position: relative;
+    left: 0;
 } 
