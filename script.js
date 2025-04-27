@@ -556,38 +556,127 @@ function handleTasksAuthSuccess() {
 // Set up local storage for notes and UI handling
 function setupNotes() {
     const notesList = document.getElementById('notes-list');
-    const noteInput = document.getElementById('note-input');
     const noteSendBtn = document.getElementById('note-send');
+    
+    // Initialize Quill editor
+    const quill = new Quill('#quill-editor', {
+        theme: 'snow',
+        placeholder: 'Type a note...',
+        modules: {
+            toolbar: [
+                ['bold', 'italic', 'underline', 'strike'],
+                ['blockquote', 'code-block'],
+                [{ 'header': 1 }, { 'header': 2 }],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                [{ 'script': 'sub'}, { 'script': 'super' }],
+                [{ 'indent': '-1'}, { 'indent': '+1' }],
+                ['link', 'image'],
+                ['clean']
+            ]
+        }
+    });
+    
+    // Add tooltips to Quill toolbar buttons
+    addQuillTooltips();
     
     // Load saved notes from local storage
     loadNotes();
     
-    // Send note when pressing Enter (not with Shift key)
-    noteInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            addNote();
-        }
+    // Helper tooltip for the editor
+    const editorTooltip = document.createElement('div');
+    editorTooltip.className = 'editor-tooltip';
+    editorTooltip.innerHTML = 'Tip: Use Ctrl+Enter to save your note';
+    editorTooltip.style.opacity = '0';
+    document.querySelector('.note-input-container').appendChild(editorTooltip);
+    
+    // Show tooltip when editor is focused
+    quill.root.addEventListener('focus', () => {
+        editorTooltip.style.opacity = '1';
+        // Hide tooltip after 3 seconds
+        setTimeout(() => {
+            editorTooltip.style.opacity = '0';
+        }, 3000);
     });
+    
+    // Send note when Enter with Ctrl key is pressed (standard rich text behavior)
+    quill.keyboard.addBinding({
+        key: 13, // Enter key
+        ctrlKey: true
+    }, function() {
+        addNote();
+    });
+    
+    // Function to add tooltips to Quill toolbar buttons
+    function addQuillTooltips() {
+        // Give time for Quill to render completely
+        setTimeout(() => {
+            const tooltipData = [
+                { selector: 'button.ql-bold', text: 'Bold (Ctrl+B)' },
+                { selector: 'button.ql-italic', text: 'Italic (Ctrl+I)' },
+                { selector: 'button.ql-underline', text: 'Underline (Ctrl+U)' },
+                { selector: 'button.ql-strike', text: 'Strikethrough' },
+                { selector: 'button.ql-blockquote', text: 'Blockquote' },
+                { selector: 'button.ql-code-block', text: 'Code Block' },
+                { selector: 'button.ql-header[value="1"]', text: 'Heading 1' },
+                { selector: 'button.ql-header[value="2"]', text: 'Heading 2' },
+                { selector: 'button.ql-list[value="ordered"]', text: 'Numbered List' },
+                { selector: 'button.ql-list[value="bullet"]', text: 'Bullet List' },
+                { selector: 'button.ql-script[value="sub"]', text: 'Subscript' },
+                { selector: 'button.ql-script[value="super"]', text: 'Superscript' },
+                { selector: 'button.ql-indent[value="-1"]', text: 'Decrease Indent' },
+                { selector: 'button.ql-indent[value="+1"]', text: 'Increase Indent' },
+                { selector: 'button.ql-link', text: 'Insert Link' },
+                { selector: 'button.ql-image', text: 'Insert Image' },
+                { selector: 'button.ql-clean', text: 'Clear Formatting' }
+            ];
+            
+            // Find all buttons in the toolbar and add tooltips
+            tooltipData.forEach(({ selector, text }) => {
+                document.querySelectorAll(selector).forEach(button => {
+                    // Add HTML title attribute for native browser tooltip
+                    button.setAttribute('title', text);
+                    
+                    // Add custom tooltip
+                    button.addEventListener('mouseenter', (e) => {
+                        const tooltip = document.createElement('div');
+                        tooltip.className = 'quill-button-tooltip';
+                        tooltip.textContent = text;
+                        
+                        // Position the tooltip above the button
+                        const rect = button.getBoundingClientRect();
+                        tooltip.style.left = rect.left + (rect.width / 2) + 'px';
+                        tooltip.style.top = rect.top - 5 + 'px'; // Adjusted offset to account for transform
+                        
+                        document.body.appendChild(tooltip);
+                        
+                        // Store the tooltip in a property so we can remove it later
+                        button._tooltip = tooltip;
+                    });
+                    
+                    // Remove tooltip when mouse leaves
+                    button.addEventListener('mouseleave', () => {
+                        if (button._tooltip) {
+                            button._tooltip.remove();
+                            button._tooltip = null;
+                        }
+                    });
+                });
+            });
+        }, 300); // Increased delay to ensure Quill is fully initialized
+    }
     
     // Send note when clicking the Send button
     noteSendBtn.addEventListener('click', addNote);
     
-    // Handle auto-resize of the textarea
-    noteInput.addEventListener('input', () => {
-        noteInput.style.height = 'auto';
-        noteInput.style.height = Math.min(noteInput.scrollHeight, 120) + 'px';
-    });
-    
     // Function to add a new note
     function addNote() {
-        const content = noteInput.value.trim();
-        if (!content) return;
+        const content = quill.root.innerHTML.trim();
+        if (!content || content === '<p><br></p>') return;
         
         // Create a new note object
         const note = {
             id: Date.now(),
-            content: content,
+            content: content, // Store HTML content
             timestamp: new Date().toISOString()
         };
         
@@ -597,8 +686,7 @@ function setupNotes() {
         saveNotes(notes);
         
         // Clear input
-        noteInput.value = '';
-        noteInput.style.height = '40px';
+        quill.root.innerHTML = '';
         
         // Refresh notes display
         loadNotes();
@@ -614,8 +702,7 @@ function setupNotes() {
             return;
         }
         
-        // Loop through notes - since we switched to column layout (not column-reverse),
-        // we need to add newer notes to the top of the list
+        // Loop through notes - add newer notes to the top of the list
         notes.forEach(note => {
             const noteElement = document.createElement('div');
             noteElement.className = 'note-item';
@@ -632,18 +719,10 @@ function setupNotes() {
                 formattedDate = new Date(note.timestamp).toLocaleString();
             }
             
-            // Parse markdown safely
-            let parsedContent;
-            try {
-                parsedContent = marked.parse(note.content);
-            } catch (error) {
-                parsedContent = note.content;
-                console.error('Error parsing markdown:', error);
-            }
-            
+            // No need to parse markdown - display HTML directly
             noteElement.innerHTML = `
                 <div class="note-timestamp">${formattedDate}</div>
-                <div class="note-content">${parsedContent}</div>
+                <div class="note-content">${note.content}</div>
                 <div class="note-actions">
                     <button class="note-action-btn edit-note">✏️</button>
                     <button class="note-action-btn delete-note">🗑️</button>
@@ -670,28 +749,98 @@ function setupNotes() {
                 // Store the original content for cancel action
                 const originalContent = noteElement.querySelector('.note-content').innerHTML;
                 
-                // Create edit mode interface
+                // Create a temporary Quill editor for editing
                 const editArea = document.createElement('div');
                 editArea.className = 'note-edit';
-                editArea.innerHTML = `
-                    <textarea class="note-edit-area">${note.content}</textarea>
-                    <div class="note-edit-buttons">
-                        <button class="note-cancel-btn">Cancel</button>
-                        <button class="note-edit-btn">Save</button>
-                    </div>
+                
+                const editContainer = document.createElement('div');
+                editContainer.id = `quill-edit-${noteId}`;
+                editContainer.className = 'quill-edit-container';
+                
+                const buttonContainer = document.createElement('div');
+                buttonContainer.className = 'note-edit-buttons';
+                buttonContainer.innerHTML = `
+                    <button class="note-cancel-btn">Cancel</button>
+                    <button class="note-edit-btn">Save</button>
                 `;
+                
+                editArea.appendChild(editContainer);
+                editArea.appendChild(buttonContainer);
                 
                 // Replace content with edit area
                 noteElement.querySelector('.note-content').replaceWith(editArea);
                 noteElement.querySelector('.note-actions').style.display = 'none';
                 
-                // Focus on textarea
-                const textarea = noteElement.querySelector('.note-edit-area');
-                textarea.focus();
+                // Initialize a Quill instance for editing
+                const editQuill = new Quill(`#quill-edit-${noteId}`, {
+                    theme: 'snow',
+                    modules: {
+                        toolbar: [
+                            ['bold', 'italic', 'underline', 'strike'],
+                            ['blockquote', 'code-block'],
+                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                            ['link'],
+                            ['clean']
+                        ]
+                    }
+                });
+                
+                // Set content from note
+                editQuill.clipboard.dangerouslyPasteHTML(note.content);
+                
+                // Add tooltips to the edit mode toolbar buttons
+                setTimeout(() => {
+                    const editTooltipData = [
+                        { selector: 'button.ql-bold', text: 'Bold (Ctrl+B)' },
+                        { selector: 'button.ql-italic', text: 'Italic (Ctrl+I)' },
+                        { selector: 'button.ql-underline', text: 'Underline (Ctrl+U)' },
+                        { selector: 'button.ql-strike', text: 'Strikethrough' },
+                        { selector: 'button.ql-blockquote', text: 'Blockquote' },
+                        { selector: 'button.ql-code-block', text: 'Code Block' },
+                        { selector: 'button.ql-list[value="ordered"]', text: 'Numbered List' },
+                        { selector: 'button.ql-list[value="bullet"]', text: 'Bullet List' },
+                        { selector: 'button.ql-link', text: 'Insert Link' },
+                        { selector: 'button.ql-clean', text: 'Clear Formatting' }
+                    ];
+                    
+                    // Find all buttons in the edit toolbar within this specific note
+                    editTooltipData.forEach(({ selector, text }) => {
+                        noteElement.querySelectorAll(selector).forEach(button => {
+                            // Add HTML title attribute for native browser tooltip
+                            button.setAttribute('title', text);
+                            
+                            // Add custom tooltip
+                            button.addEventListener('mouseenter', (e) => {
+                                const tooltip = document.createElement('div');
+                                tooltip.className = 'quill-button-tooltip';
+                                tooltip.textContent = text;
+                                
+                                // Position the tooltip above the button
+                                const rect = button.getBoundingClientRect();
+                                tooltip.style.left = rect.left + (rect.width / 2) + 'px';
+                                tooltip.style.top = rect.top - 5 + 'px'; // Adjusted offset to account for transform
+                                
+                                document.body.appendChild(tooltip);
+                                
+                                // Store the tooltip in a property so we can remove it later
+                                button._tooltip = tooltip;
+                            });
+                            
+                            // Remove tooltip when mouse leaves
+                            button.addEventListener('mouseleave', () => {
+                                if (button._tooltip) {
+                                    button._tooltip.remove();
+                                    button._tooltip = null;
+                                }
+                            });
+                        });
+                    });
+                }, 100); // Short delay to ensure Quill is fully initialized
                 
                 // Add event listeners for save and cancel
                 noteElement.querySelector('.note-edit-btn').addEventListener('click', () => {
-                    saveEditedNote(noteId, textarea.value);
+                    const htmlContent = editQuill.root.innerHTML;
+                    saveEditedNote(noteId, htmlContent);
                 });
                 
                 noteElement.querySelector('.note-cancel-btn').addEventListener('click', () => {
