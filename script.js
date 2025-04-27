@@ -1156,6 +1156,23 @@ function setupAutoRefresh() {
 function listCalendarEvents() {
     const calendarContent = document.getElementById('calendar-content');
     const statusIndicator = document.getElementById('calendar-status');
+    const headerSection = document.querySelector('#calendar-section .section-header');
+    
+    // Add 'Show Hidden' button if it doesn't exist
+    if (!document.getElementById('show-hidden-events') && getHiddenItems().event.length > 0) {
+        const showHiddenBtn = document.createElement('button');
+        showHiddenBtn.className = 'show-hidden-btn';
+        showHiddenBtn.id = 'show-hidden-events';
+        showHiddenBtn.innerHTML = '<i class="fas fa-eye"></i>';
+        showHiddenBtn.title = 'Show hidden events';
+        showHiddenBtn.addEventListener('click', () => {
+            clearHiddenItemsByType('event');
+        });
+        
+        // Add after refresh button
+        const refreshBtn = document.getElementById('refresh-calendar');
+        headerSection.insertBefore(showHiddenBtn, refreshBtn);
+    }
     
     // Show loading state
     statusIndicator.innerHTML = 'Loading events... <div class="loader"></div>';
@@ -1170,7 +1187,7 @@ function listCalendarEvents() {
     }
     
     // Get events up to a week from now
-    let nextWeek = today.plus({ days: 7 });
+    let nextWeek = today.plus({ days: 60 });
     
     try {
         gapi.client.calendar.events.list({
@@ -1210,6 +1227,9 @@ function displayCalendarEvents(events) {
     }
     
     try {
+        // Get hidden items
+        const hiddenItems = getHiddenItems();
+        
         // Group events by day
         const eventsByDay = {};
         let today, tomorrow;
@@ -1224,6 +1244,11 @@ function displayCalendarEvents(events) {
         }
         
         events.forEach(event => {
+            // Skip hidden events
+            if (hiddenItems.event.includes(event.id)) {
+                return;
+            }
+            
             // Parse event start time (with timezone support)
             let start;
             if (event.start.dateTime) {
@@ -1279,16 +1304,20 @@ function displayCalendarEvents(events) {
                 }
                 
                 html += `
-                    <div class="event-item">
+                    <div class="event-item" data-id="${event.id}">
                         <div class="event-title">${event.summary || 'Untitled Event'}</div>
                         <div class="event-time">${timeStr}</div>
                         ${event.location ? `<div class="event-location">📍 ${event.location}</div>` : ''}
+                        <button class="hide-item-btn" title="Hide this event"><i class="fas fa-eye-slash"></i></button>
                     </div>
                 `;
             });
         });
         
         calendarContent.innerHTML = html;
+        
+        // Add event listeners to hide buttons
+        addHideButtonListeners();
     } catch (error) {
         console.error('Error displaying calendar events:', error);
         showError('calendar-section', 'Calendar Display Error', 'Failed to display calendar events due to an error.');
@@ -1299,6 +1328,23 @@ function displayCalendarEvents(events) {
 function listTasks() {
     const tasksContent = document.getElementById('tasks-content');
     const statusIndicator = document.getElementById('tasks-status');
+    const headerSection = document.querySelector('#tasks-section .section-header');
+    
+    // Add 'Show Hidden' button if it doesn't exist
+    if (!document.getElementById('show-hidden-tasks') && getHiddenItems().task.length > 0) {
+        const showHiddenBtn = document.createElement('button');
+        showHiddenBtn.className = 'show-hidden-btn';
+        showHiddenBtn.id = 'show-hidden-tasks';
+        showHiddenBtn.innerHTML = '<i class="fas fa-eye"></i>';
+        showHiddenBtn.title = 'Show hidden tasks';
+        showHiddenBtn.addEventListener('click', () => {
+            clearHiddenItemsByType('task');
+        });
+        
+        // Add after refresh button
+        const refreshBtn = document.getElementById('refresh-tasks');
+        headerSection.insertBefore(showHiddenBtn, refreshBtn);
+    }
     
     // Show loading state
     statusIndicator.innerHTML = 'Loading tasks... <div class="loader"></div>';
@@ -1355,6 +1401,9 @@ function displayTasks(tasks) {
     }
     
     try {
+        // Get hidden items
+        const hiddenItems = getHiddenItems();
+        
         // Sort tasks: incomplete first, then by due date
         tasks.sort((a, b) => {
             if ((a.status === 'completed') !== (b.status === 'completed')) {
@@ -1383,6 +1432,11 @@ function displayTasks(tasks) {
         let html = '';
         
         tasks.forEach(task => {
+            // Skip hidden tasks
+            if (hiddenItems.task.includes(task.id)) {
+                return;
+            }
+            
             const isCompleted = task.status === 'completed';
             let dueDate = null;
             
@@ -1409,17 +1463,21 @@ function displayTasks(tasks) {
             }
             
             html += `
-                <div class="task-item ${isCompleted ? 'completed' : ''}">
+                <div class="task-item ${isCompleted ? 'completed' : ''}" data-id="${task.id}">
                     <input type="checkbox" class="task-checkbox" ${isCompleted ? 'checked' : ''} disabled>
                     <div class="task-text">
                         <div class="task-title">${task.title || 'Untitled Task'}</div>
                         ${dueStr ? `<div class="task-due">${dueStr}</div>` : ''}
                     </div>
+                    <button class="hide-item-btn" title="Hide this task"><i class="fas fa-eye-slash"></i></button>
                 </div>
             `;
         });
         
         tasksContent.innerHTML = html;
+        
+        // Add event listeners to hide buttons
+        addHideButtonListeners();
     } catch (error) {
         console.error('Error displaying tasks:', error);
         showError('tasks-section', 'Tasks Display Error', 'Failed to display tasks due to an error.');
@@ -1437,5 +1495,81 @@ function toggleWeatherDisplay(show) {
     } else {
         weatherContainer.style.display = 'none';
         dashboardTitle.classList.add('title-left');
+    }
+}
+
+// Add event listeners to hide buttons for both calendar events and tasks
+function addHideButtonListeners() {
+    document.querySelectorAll('.hide-item-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation(); // Prevent event bubbling
+            const item = this.closest('.event-item, .task-item');
+            if (item) {
+                item.style.display = 'none';
+                
+                // Store the hidden state in localStorage
+                const itemId = item.dataset.id;
+                const itemType = item.classList.contains('event-item') ? 'event' : 'task';
+                
+                if (itemId) {
+                    // Get current hidden items
+                    const hiddenItems = getHiddenItems();
+                    
+                    // Add this item to the hidden items list if not already there
+                    if (!hiddenItems[itemType].includes(itemId)) {
+                        hiddenItems[itemType].push(itemId);
+                        saveHiddenItems(hiddenItems);
+                    }
+                }
+            }
+        });
+    });
+}
+
+// Get hidden items from localStorage
+function getHiddenItems() {
+    const hiddenItemsStr = localStorage.getItem('dashboard_hidden_items');
+    const defaultHiddenItems = { event: [], task: [] };
+    
+    if (!hiddenItemsStr) {
+        return defaultHiddenItems;
+    }
+    
+    try {
+        return JSON.parse(hiddenItemsStr);
+    } catch (error) {
+        console.error('Error parsing hidden items:', error);
+        return defaultHiddenItems;
+    }
+}
+
+// Save hidden items to localStorage
+function saveHiddenItems(hiddenItems) {
+    localStorage.setItem('dashboard_hidden_items', JSON.stringify(hiddenItems));
+}
+
+// Clear all hidden items
+function clearHiddenItems() {
+    saveHiddenItems({ event: [], task: [] });
+    // Refresh the displayed items
+    if (calendarAuthorized) {
+        listCalendarEvents();
+    }
+    if (tasksAuthorized) {
+        listTasks();
+    }
+}
+
+// Clear hidden items of a specific type
+function clearHiddenItemsByType(type) {
+    const hiddenItems = getHiddenItems();
+    hiddenItems[type] = [];
+    saveHiddenItems(hiddenItems);
+    
+    // Refresh the appropriate section
+    if (type === 'event' && calendarAuthorized) {
+        listCalendarEvents();
+    } else if (type === 'task' && tasksAuthorized) {
+        listTasks();
     }
 } 

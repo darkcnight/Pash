@@ -134,6 +134,7 @@ body {
     border-radius: 6px;
     background-color: var(--light-bg);
     border-left: 4px solid var(--accent-color);
+    position: relative;
 }
 
 .event-item {
@@ -884,4 +885,56 @@ input:checked + .slider:before {
 
 .github-link i {
     font-size: 1.1rem;
+}
+
+/* Hide button styles */
+.hide-item-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: none;
+    border: none;
+    color: var(--secondary-text);
+    font-size: 0.9rem;
+    opacity: 0;
+    transition: opacity 0.2s ease, color 0.2s ease;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 50%;
+}
+
+.hide-item-btn:hover {
+    color: var(--accent-color);
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.event-item:hover .hide-item-btn,
+.task-item:hover .hide-item-btn {
+    opacity: 1;
+}
+
+/* Show hidden items button */
+.show-hidden-btn {
+    background: none;
+    border: none;
+    color: var(--accent-color);
+    cursor: pointer;
+    font-size: 1rem;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+    margin-right: 5px;
+}
+
+.show-hidden-btn:hover {
+    background-color: rgba(66, 133, 244, 0.1);
+    transform: rotate(-30deg);
+}
+
+.show-hidden-btn i {
+    font-size: 0.9rem;
 } 
