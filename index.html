@@ -87,15 +87,15 @@
             </div>
             <div class="modal-body">
                 <div class="settings-group">
-                    <label for="google-client-id">Google API Client ID:</label>
+                    <label for="google-client-id">Google API Client ID: <span class="help-button" data-help="oauth-client-id">?</span></label>
                     <input type="text" id="google-client-id" placeholder="Enter your Google API Client ID">
                 </div>
                 <div class="settings-group">
-                    <label for="google-api-key">Google API Key:</label>
+                    <label for="google-api-key">Google API Key: <span class="help-button" data-help="google-api-key">?</span></label>
                     <input type="text" id="google-api-key" placeholder="Enter your Google API Key">
                 </div>
                 <div class="settings-group">
-                    <label for="weather-api-key">OpenWeatherMap API Key:</label>
+                    <label for="weather-api-key">OpenWeatherMap API Key: <span class="help-button" data-help="weather-api-key">?</span></label>
                     <input type="text" id="weather-api-key" placeholder="Enter your OpenWeatherMap API Key">
                 </div>
                 <div class="settings-group">
@@ -154,6 +154,12 @@
 
     <!-- Overlay for modal -->
     <div class="modal-overlay" id="modal-overlay"></div>
+
+    <!-- Help dialog -->
+    <div class="help-dialog" id="help-dialog">
+        <span class="help-dialog-close" id="help-dialog-close">&times;</span>
+        <div id="help-dialog-content"></div>
+    </div>
 
     <!-- Import marked.js for Markdown parsing -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>

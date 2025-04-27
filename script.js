@@ -283,6 +283,86 @@ function setupSettingsModal() {
     const themeToggle = document.getElementById('theme-toggle');
     const dateToggle = document.getElementById('date-toggle');
     
+    // Help elements
+    const helpButtons = document.querySelectorAll('.help-button');
+    const helpDialog = document.getElementById('help-dialog');
+    const helpDialogClose = document.getElementById('help-dialog-close');
+    const helpDialogContent = document.getElementById('help-dialog-content');
+    
+    // Set up help dialog functionality
+    helpButtons.forEach(button => {
+        button.addEventListener('click', e => {
+            const helpType = e.target.getAttribute('data-help');
+            showHelpDialog(helpType);
+            e.stopPropagation(); // Prevent the event from propagating to parent elements
+        });
+    });
+    
+    // Close help dialog when X is clicked
+    helpDialogClose.addEventListener('click', () => {
+        helpDialog.style.display = 'none';
+    });
+    
+    // Close help dialog when clicking outside
+    modalOverlay.addEventListener('click', () => {
+        helpDialog.style.display = 'none';
+    });
+    
+    // Function to show the appropriate help content
+    function showHelpDialog(helpType) {
+        let content = '';
+        
+        switch (helpType) {
+            case 'google-api-key':
+                content = `
+                    <h3>Google API Key</h3>
+                    <p><strong>Purpose:</strong> Identifies your Google Cloud project and is used for accessing public Google APIs.</p>
+                    <p><a href="https://developers.google.com/maps/documentation/javascript/get-api-key" target="_blank">Official Documentation</a></p>
+                    <p><strong>Steps:</strong></p>
+                    <ul>
+                        <li>Go to the <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console Credentials page</a>.</li>
+                        <li>Click Create Credentials and select API key.</li>
+                        <li>Copy the generated API key.</li>
+                        <li>(Optional but recommended) Click on the API key name to set restrictions for security purposes.</li>
+                    </ul>
+                `;
+                break;
+            case 'oauth-client-id':
+                content = `
+                    <h3>Google OAuth Client ID</h3>
+                    <p><strong>Purpose:</strong> Used for OAuth 2.0 authentication to access user-specific data like Google Calendar and Tasks.</p>
+                    <p><a href="https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid" target="_blank">Official Documentation</a></p>
+                    <p><strong>Steps:</strong></p>
+                    <ul>
+                        <li>Navigate to the <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console Credentials page</a>.</li>
+                        <li>Click Create Credentials and choose OAuth client ID.</li>
+                        <li>If prompted, configure the OAuth consent screen with your app details.</li>
+                        <li>Select Web application as the application type.</li>
+                        <li>Under Authorized JavaScript origins, add your app's URL (e.g., http://localhost:8000).</li>
+                        <li>Click Create and copy the generated Client ID.</li>
+                    </ul>
+                `;
+                break;
+            case 'weather-api-key':
+                content = `
+                    <h3>OpenWeatherMap API Key</h3>
+                    <p><strong>Purpose:</strong> Accesses weather data for displaying current conditions and forecasts.</p>
+                    <p><a href="https://openweathermap.org/faq" target="_blank">Official Documentation</a></p>
+                    <p><strong>Steps:</strong></p>
+                    <ul>
+                        <li>Sign up or log in at <a href="https://openweathermap.org/" target="_blank">OpenWeatherMap</a>.</li>
+                        <li>Navigate to the API keys section of your account.</li>
+                        <li>Click Create key, enter a name for the key, and submit.</li>
+                        <li>Copy the generated API key for use in your application.</li>
+                    </ul>
+                `;
+                break;
+        }
+        
+        helpDialogContent.innerHTML = content;
+        helpDialog.style.display = 'block';
+    }
+    
     // Populate the timezone dropdown
     populateTimezones(timezoneSelect);
     
