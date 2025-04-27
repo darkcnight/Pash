@@ -9,6 +9,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Quill CSS for rich text editing -->
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <!-- Header panel -->
@@ -38,7 +40,7 @@
         <div class="section" id="calendar-section">
             <div class="section-header">
                 <h2 class="section-title">Calendar</h2>
-                <button class="refresh-button" id="refresh-calendar">Refresh</button>
+                <button class="refresh-button" id="refresh-calendar"><i class="fas fa-sync-alt"></i></button>
             </div>
             <div class="section-content" id="calendar-content">
                 <div class="login-prompt" id="calendar-login-prompt">
@@ -52,7 +54,7 @@
         <div class="section" id="tasks-section">
             <div class="section-header">
                 <h2 class="section-title">Tasks</h2>
-                <button class="refresh-button" id="refresh-tasks">Refresh</button>
+                <button class="refresh-button" id="refresh-tasks"><i class="fas fa-sync-alt"></i></button>
             </div>
             <div class="section-content" id="tasks-content">
                 <div class="login-prompt" id="tasks-login-prompt">
@@ -142,6 +144,9 @@
                 </div>
             </div>
             <div class="modal-footer">
+                <a href="https://github.com/darkcnight/Pash" target="_blank" class="github-link">
+                    <i class="fab fa-github"></i> GitHub
+                </a>
                 <button id="settings-save" class="settings-save-btn">Save Settings</button>
             </div>
         </div>
