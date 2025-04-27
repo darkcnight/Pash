@@ -22,12 +22,15 @@
             <button class="edit-title-btn" id="edit-title-btn">✏️</button>
         </div>
         
-        <!-- Clock widget -->
-        <div class="clock-container" id="clock">00:00:00</div>
+        <!-- Clock and settings container -->
+        <div class="clock-settings-container">
+            <!-- Clock widget -->
+            <div class="clock-container" id="clock">00:00:00</div>
+            
+            <!-- Settings button -->
+            <div class="settings-button" id="settings-button">⚙️</div>
+        </div>
     </div>
-
-    <!-- Settings button -->
-    <div class="settings-button" id="settings-button">⚙️</div>
 
     <div class="dashboard">
         <div class="section" id="calendar-section">
@@ -110,6 +113,17 @@
                             <span class="slider round"></span>
                         </label>
                         <span class="theme-icon dark-icon">🌙</span>
+                    </div>
+                </div>
+                <div class="settings-group theme-toggle-container">
+                    <label>Show Date:</label>
+                    <div class="theme-toggle">
+                        <span class="theme-icon">📅</span>
+                        <label class="switch">
+                            <input type="checkbox" id="date-toggle">
+                            <span class="slider round"></span>
+                        </label>
+                        <span class="theme-icon">🕒</span>
                     </div>
                 </div>
             </div>

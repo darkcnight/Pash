@@ -6,7 +6,8 @@ let CONFIG = {
     WEATHER_LOCATION: 'Singapore',
     TIMEZONE: 'Asia/Singapore',
     DASHBOARD_TITLE: 'Pash',
-    THEME: 'light' // 'light' or 'dark'
+    THEME: 'light', // 'light' or 'dark'
+    SHOW_DATE: false // Whether to show date with the time
 };
 
 // Load settings from localStorage if available
@@ -27,6 +28,11 @@ function loadSettings() {
             if (CONFIG.THEME === 'dark') {
                 document.body.classList.add('dark-mode');
                 document.getElementById('theme-toggle').checked = true;
+            }
+            
+            // Apply date toggle setting
+            if (CONFIG.SHOW_DATE === true && document.getElementById('date-toggle')) {
+                document.getElementById('date-toggle').checked = true;
             }
         } catch (err) {
             console.error('Error parsing saved settings:', err);
@@ -275,6 +281,7 @@ function setupSettingsModal() {
     const weatherApiKeyInput = document.getElementById('weather-api-key');
     const timezoneSelect = document.getElementById('timezone-select');
     const themeToggle = document.getElementById('theme-toggle');
+    const dateToggle = document.getElementById('date-toggle');
     
     // Populate the timezone dropdown
     populateTimezones(timezoneSelect);
@@ -285,6 +292,7 @@ function setupSettingsModal() {
     weatherApiKeyInput.value = CONFIG.WEATHER_API_KEY || '';
     timezoneSelect.value = CONFIG.TIMEZONE || 'Asia/Singapore';
     themeToggle.checked = CONFIG.THEME === 'dark';
+    dateToggle.checked = CONFIG.SHOW_DATE === true;
     
     // Show the modal when settings button is clicked
     settingsButton.addEventListener('click', () => {
@@ -317,6 +325,14 @@ function setupSettingsModal() {
         saveSettings({ THEME: CONFIG.THEME });
     });
     
+    // Toggle date display when date toggle is clicked
+    dateToggle.addEventListener('change', () => {
+        CONFIG.SHOW_DATE = dateToggle.checked;
+        saveSettings({ SHOW_DATE: CONFIG.SHOW_DATE });
+        // Update the clock immediately to reflect the change
+        setupClock();
+    });
+    
     // Save settings when save button is clicked
     saveButton.addEventListener('click', () => {
         const settings = {
@@ -324,7 +340,8 @@ function setupSettingsModal() {
             API_KEY: apiKeyInput.value.trim(),
             WEATHER_API_KEY: weatherApiKeyInput.value.trim(),
             TIMEZONE: timezoneSelect.value,
-            THEME: themeToggle.checked ? 'dark' : 'light'
+            THEME: themeToggle.checked ? 'dark' : 'light',
+            SHOW_DATE: dateToggle.checked
         };
         
         saveSettings(settings);
@@ -636,24 +653,46 @@ function setupClock() {
         try {
             // Use the configured timezone
             const now = DateTime.now().setZone(CONFIG.TIMEZONE);
-            const formatted = now.toFormat('HH:mm:ss');
+            let formatted;
+            
+            if (CONFIG.SHOW_DATE) {
+                // Format with date: 'ddd, dd MMM yyyy HH:mm'
+                formatted = now.toFormat('ccc, dd LLL yyyy HH:mm');
+            } else {
+                // Format with time only
+                formatted = now.toFormat('HH:mm');
+            }
+            
             clockElement.textContent = formatted;
         } catch (error) {
-            // Fallback to system time if timezone fails
-            console.error('Error updating clock with timezone:', error);
+            // Fallback if there's an error
+            console.error('Error updating clock:', error);
             const now = new Date();
             const hours = String(now.getHours()).padStart(2, '0');
             const minutes = String(now.getMinutes()).padStart(2, '0');
-            const seconds = String(now.getSeconds()).padStart(2, '0');
-            clockElement.textContent = `${hours}:${minutes}:${seconds}`;
+            
+            if (CONFIG.SHOW_DATE) {
+                const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const day = days[now.getDay()];
+                const date = String(now.getDate()).padStart(2, '0');
+                const month = months[now.getMonth()];
+                const year = now.getFullYear();
+                clockElement.textContent = `${day}, ${date} ${month} ${year} ${hours}:${minutes}`;
+            } else {
+                clockElement.textContent = `${hours}:${minutes}`;
+            }
         }
     }
-    
-    // Update immediately
+
     updateClock();
     
-    // Update every second
-    setInterval(updateClock, 1000);
+    // Update every minute since we don't show seconds
+    // Clear any existing intervals to prevent multiple updates
+    if (window.clockInterval) {
+        clearInterval(window.clockInterval);
+    }
+    window.clockInterval = setInterval(updateClock, 60000);
 }
 
 // Set up weather functionality
