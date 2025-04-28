@@ -3277,8 +3277,26 @@ function clearHiddenItemsByType(type) {
 
 // Set up calendar window dropdown functionality
 function setupCalendarWindowDropdown() {
-    // Get the dropdown element in the calendar section header
+    const dropdownButton = document.getElementById('calendar-window-btn');
+    const dropdownContent = document.getElementById('calendar-window-dropdown');
     const calendarWindowSelect = document.getElementById('calendar-window-select');
+    
+    if (dropdownButton && dropdownContent) {
+        dropdownButton.addEventListener('click', (event) => {
+            event.stopPropagation(); // Prevent the click from closing the menu immediately
+            const isVisible = dropdownContent.style.display === 'block';
+            dropdownContent.style.display = isVisible ? 'none' : 'block';
+        });
+
+        // Close dropdown if clicking outside
+        document.addEventListener('click', (event) => {
+            if (!dropdownContent.contains(event.target) && event.target !== dropdownButton) {
+                dropdownContent.style.display = 'none';
+            }
+        });
+    } else {
+        console.warn("Calendar window dropdown button or content not found.");
+    }
     
     if (calendarWindowSelect) {
         // Set the initial value to match the current setting
@@ -3296,7 +3314,14 @@ function setupCalendarWindowDropdown() {
             if (calendarAuthorized) {
                 listCalendarEvents();
             }
+            
+            // Optionally close the dropdown after selection
+            if (dropdownContent) {
+                 dropdownContent.style.display = 'none';
+            }
         });
+    } else {
+        console.warn("Calendar window select element not found.");
     }
 }
 
