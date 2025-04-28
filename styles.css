@@ -1401,4 +1401,32 @@ body.dark-mode .ql-editor {
 
 body.dark-mode .ql-editor p {
     color: var(--text-color);
+}
+
+/* PWA Offline Styling */
+.offline-mode .section-content:after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0,0,0,0.05);
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.offline-mode .section:before {
+  content: "⚠️ Currently offline";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: var(--section-bg);
+  padding: 10px 15px;
+  border-radius: 4px;
+  z-index: 20;
+  box-shadow: 0 2px 10px var(--section-shadow);
 } 

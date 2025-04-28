@@ -3751,3 +3751,27 @@ function loadPaneOrder() {
 }
 
 // The setupSortablePanes function is already called in the main DOMContentLoaded event listener
+
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/pash/service-worker.js')
+      .then(registration => {
+        console.log('Service Worker registered successfully:', registration.scope);
+      })
+      .catch(error => {
+        console.error('Service Worker registration failed:', error);
+      });
+  });
+}
+
+// Simple offline detection
+window.addEventListener('online', () => {
+  document.body.classList.remove('offline-mode');
+  showToast('You are back online', 'success');
+});
+
+window.addEventListener('offline', () => {
+  document.body.classList.add('offline-mode');
+  showToast('You are offline. Some features may be unavailable.', 'warning', 5000);
+});
