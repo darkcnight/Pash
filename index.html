@@ -32,7 +32,9 @@
             <div class="clock-container" id="clock">00:00:00</div>
             
             <!-- Settings button -->
-            <div class="settings-button" id="settings-button">⚙️</div>
+            <div class="settings-button" id="settings-button">
+                <i class="fas fa-cog"></i>
+            </div>
         </div>
     </div>
 
@@ -101,7 +103,7 @@
                 <div class="note-input-container">
                     <!-- Replace textarea with Quill editor -->
                     <div id="quill-editor"></div>
-                    <button class="note-send-btn" id="note-send">Send</button>
+                    <button class="note-send-btn" id="note-send"><i class="fas fa-plus"></i></button>
                 </div>
             </div>
         </div>
@@ -115,69 +117,93 @@
                 <span class="close-modal">&times;</span>
             </div>
             <div class="modal-body">
-                <div class="settings-group">
-                    <label for="google-client-id">Google API Client ID: <span class="help-button" data-help="oauth-client-id">?</span></label>
-                    <input type="text" id="google-client-id" placeholder="Enter your Google API Client ID">
-                </div>
-                <div class="settings-group">
-                    <label for="google-api-key">Google API Key: <span class="help-button" data-help="google-api-key">?</span></label>
-                    <input type="text" id="google-api-key" placeholder="Enter your Google API Key">
-                </div>
-                <div class="settings-group">
-                    <label for="weather-api-key">OpenWeatherMap API Key: <span class="help-button" data-help="weather-api-key">?</span></label>
-                    <input type="text" id="weather-api-key" placeholder="Enter your OpenWeatherMap API Key">
-                </div>
-                <div class="settings-group">
-                    <label for="timezone-select">Timezone:</label>
-                    <input type="text" id="timezone-select" placeholder="Enter your timezone">
-                    <!-- Datalist will be added by JavaScript -->
-                </div>
-                <div class="settings-group">
-                    <label for="calendar-days-select">Calendar Window:</label>
-                    <select id="calendar-days-select">
-                        <option value="7">1 Week</option>
-                        <option value="14">2 Weeks</option>
-                        <option value="21">3 Weeks</option>
-                        <option value="28">4 Weeks</option>
-                        <option value="35">5 Weeks</option>
-                        <option value="42">6 Weeks</option>
-                        <option value="49">7 Weeks</option>
-                        <option value="56">8 Weeks</option>
-                        <option value="63">9 Weeks</option>
-                        <option value="70">10 Weeks</option>
-                    </select>
-                </div>
-                <div class="settings-group theme-toggle-container">
-                    <label>Theme:</label>
-                    <div class="theme-toggle">
-                        <span class="theme-icon light-icon">☀️</span>
-                        <label class="switch">
-                            <input type="checkbox" id="theme-toggle">
-                            <span class="slider round"></span>
-                        </label>
-                        <span class="theme-icon dark-icon">🌙</span>
+                <div class="settings-columns">
+                    <!-- Left Column - Date and Clock Settings -->
+                    <div class="settings-column">
+                        <div class="settings-group theme-toggle-container">
+                            <label>Show Date:</label>
+                            <div class="theme-toggle">
+                                <span class="theme-icon"><i class="fas fa-calendar"></i></span>
+                                <label class="switch">
+                                    <input type="checkbox" id="date-toggle">
+                                    <span class="slider round"></span>
+                                </label>
+                                <span class="theme-icon"><i class="fas fa-times"></i></span>
+                            </div>
+                        </div>
+                        <div class="settings-group theme-toggle-container">
+                            <label>Clock Format:</label>
+                            <div class="theme-toggle">
+                                <span class="theme-icon"><i class="fas fa-clock"></i> 24h</span>
+                                <label class="switch">
+                                    <input type="checkbox" id="clock-format-toggle">
+                                    <span class="slider round"></span>
+                                </label>
+                                <span class="theme-icon"><i class="fas fa-clock"></i> 12h</span>
+                            </div>
+                        </div>
+                        <div class="settings-group">
+                            <label for="timezone-select">Timezone:</label>
+                            <select id="timezone-select" name="timezone-select">
+                                <!-- Options will be populated by JavaScript -->
+                            </select>
+                        </div>
+                        <div class="settings-group">
+                            <label for="calendar-days-select">Calendar Window:</label>
+                            <select id="calendar-days-select">
+                                <option value="7">1 Week</option>
+                                <option value="14">2 Weeks</option>
+                                <option value="21">3 Weeks</option>
+                                <option value="28">4 Weeks</option>
+                                <option value="35">5 Weeks</option>
+                                <option value="42">6 Weeks</option>
+                                <option value="49">7 Weeks</option>
+                                <option value="56">8 Weeks</option>
+                                <option value="63">9 Weeks</option>
+                                <option value="70">10 Weeks</option>
+                            </select>
+                        </div>
                     </div>
-                </div>
-                <div class="settings-group theme-toggle-container">
-                    <label>Show Date:</label>
-                    <div class="theme-toggle">
-                        <span class="theme-icon">📅</span>
-                        <label class="switch">
-                            <input type="checkbox" id="date-toggle">
-                            <span class="slider round"></span>
-                        </label>
-                        <span class="theme-icon">🕒</span>
-                    </div>
-                </div>
-                <div class="settings-group theme-toggle-container">
-                    <label>Show Weather:</label>
-                    <div class="theme-toggle">
-                        <span class="theme-icon">🌤️</span>
-                        <label class="switch">
-                            <input type="checkbox" id="weather-toggle">
-                            <span class="slider round"></span>
-                        </label>
-                        <span class="theme-icon">🌡️</span>
+                    
+                    <!-- Divider -->
+                    <div class="settings-column-divider"></div>
+                    
+                    <!-- Right Column - Theme and API Settings -->
+                    <div class="settings-column">
+                        <div class="settings-group theme-toggle-container">
+                            <label>Theme:</label>
+                            <div class="theme-toggle">
+                                <span class="theme-icon light-icon"><i class="fas fa-sun"></i></span>
+                                <label class="switch">
+                                    <input type="checkbox" id="theme-toggle">
+                                    <span class="slider round"></span>
+                                </label>
+                                <span class="theme-icon dark-icon"><i class="fas fa-moon"></i></span>
+                            </div>
+                        </div>
+                        <div class="settings-group theme-toggle-container">
+                            <label>Show Weather:</label>
+                            <div class="theme-toggle">
+                                <span class="theme-icon"><i class="fas fa-cloud-sun"></i></span>
+                                <label class="switch">
+                                    <input type="checkbox" id="weather-toggle">
+                                    <span class="slider round"></span>
+                                </label>
+                                <span class="theme-icon"><i class="fas fa-times"></i></span>
+                            </div>
+                        </div>
+                        <div class="settings-group">
+                            <label for="google-client-id">Google API Client ID: <span class="help-button" data-help="oauth-client-id"><i class="fas fa-question-circle"></i></span></label>
+                            <input type="text" id="google-client-id" placeholder="Enter your Google API Client ID">
+                        </div>
+                        <div class="settings-group">
+                            <label for="google-api-key">Google API Key: <span class="help-button" data-help="google-api-key"><i class="fas fa-question-circle"></i></span></label>
+                            <input type="text" id="google-api-key" placeholder="Enter your Google API Key">
+                        </div>
+                        <div class="settings-group">
+                            <label for="weather-api-key">OpenWeatherMap API Key: <span class="help-button" data-help="weather-api-key"><i class="fas fa-question-circle"></i></span></label>
+                            <input type="text" id="weather-api-key" placeholder="Enter your OpenWeatherMap API Key">
+                        </div>
                     </div>
                 </div>
             </div>

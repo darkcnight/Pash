@@ -9,16 +9,21 @@ let CONFIG = {
     THEME: 'light', // 'light' or 'dark'
     SHOW_DATE: false, // Whether to show date with the time
     SHOW_WEATHER: true, // Whether to show weather in the header
-    CALENDAR_DAYS: 7  // Number of days to pull calendar events (default: 7)
+    CALENDAR_DAYS: 7,  // Number of days to pull calendar events (default: 7)
+    CLOCK_24H: true // Whether to use 24-hour format (true) or 12-hour format (false)
 };
 
 // Load settings from localStorage if available
 function loadSettings() {
     const savedSettings = localStorage.getItem('dashboard_settings');
+    console.log("Loading settings from localStorage:", savedSettings);
+    
     if (savedSettings) {
         try {
             const parsedSettings = JSON.parse(savedSettings);
+            console.log("Parsed settings:", parsedSettings);
             CONFIG = { ...CONFIG, ...parsedSettings };
+            console.log("Merged CONFIG:", CONFIG);
             
             // Apply title
             if (CONFIG.DASHBOARD_TITLE) {
@@ -35,6 +40,12 @@ function loadSettings() {
             // Apply date toggle setting
             if (CONFIG.SHOW_DATE === true && document.getElementById('date-toggle')) {
                 document.getElementById('date-toggle').checked = true;
+            }
+            
+            // Apply clock format setting
+            if (document.getElementById('clock-format-toggle')) {
+                // 12h format = checked, 24h format = unchecked
+                document.getElementById('clock-format-toggle').checked = !CONFIG.CLOCK_24H;
             }
             
             // Apply weather toggle setting
@@ -158,6 +169,11 @@ function applySettings(changedSettings) {
             case 'TIMEZONE':
                 // Update clock
                 setupClock();
+                // Force immediate clock update
+                const updateClockFn = window.updateClockFn;
+                if (typeof updateClockFn === 'function') {
+                    updateClockFn();
+                }
                 // Refresh calendar and task dates (if initialized)
                 if (calendarAuthorized) {
                     // Don't reload data, just refresh the display
@@ -169,16 +185,28 @@ function applySettings(changedSettings) {
                 }
                 break;
                 
-            case 'THEME':
+            case 'DARK_MODE':
                 // Toggle dark mode
-                if (newValue === 'dark') {
+                if (newValue === true) {
                     document.body.classList.add('dark-mode');
                 } else {
                     document.body.classList.remove('dark-mode');
                 }
+                
+                // Refresh calendar and task display to update colors
+                if (calendarAuthorized) {
+                    refreshCalendarDisplay();
+                }
+                if (tasksAuthorized) {
+                    refreshTasksDisplay();
+                }
+                
+                // Restore any custom colors
+                restoreCustomColors();
                 break;
                 
             case 'SHOW_DATE':
+            case 'CLOCK_24H':
                 // Update clock format
                 setupClock();
                 break;
@@ -197,6 +225,34 @@ function applySettings(changedSettings) {
     });
     
     return Object.keys(changes).length > 0 ? changes : null;
+}
+
+// Helper function to restore custom colors after theme change
+function restoreCustomColors() {
+    // Get stored colors
+    const itemColors = getItemColors();
+    
+    // Restore colors for each type
+    Object.keys(itemColors).forEach(itemType => {
+        const typeColors = itemColors[itemType];
+        Object.keys(typeColors).forEach(itemId => {
+            const color = typeColors[itemId];
+            if (color) {
+                // Find the element in the DOM
+                let item = null;
+                if (itemType === 'note') {
+                    item = document.querySelector(`.note-item[data-id="${itemId}"]`);
+                } else {
+                    item = document.querySelector(`[data-id="${itemId}"][data-type="${itemType}"]`);
+                }
+                
+                // If found, apply the color
+                if (item) {
+                    item.style.borderLeftColor = color;
+                }
+            }
+        });
+    });
 }
 
 // Highlight a changed setting in the UI
@@ -220,9 +276,9 @@ function highlightChangedSetting(settingKey) {
         case 'CALENDAR_DAYS':
             element = document.getElementById('calendar-days-select');
             break;
-        case 'THEME':
-            // Highlight the container instead of the toggle
-            element = document.querySelector('.theme-toggle-container');
+        case 'DARK_MODE':
+            // Highlight the theme toggle container
+            element = document.querySelector('.theme-toggle-container:first-of-type');
             break;
         case 'SHOW_DATE':
         case 'SHOW_WEATHER':
@@ -309,34 +365,60 @@ function refreshTasksDisplay() {
 
 // Reinitialize Google APIs with new credentials
 function reinitializeGoogleAPIs() {
+    console.log("📌 reinitializeGoogleAPIs() called");
+    console.log("📌 CONFIG.API_KEY:", CONFIG.API_KEY ? "Present (length:" + CONFIG.API_KEY.length + ")" : "Missing");
+    console.log("📌 CONFIG.CLIENT_ID:", CONFIG.CLIENT_ID ? "Present (length:" + CONFIG.CLIENT_ID.length + ")" : "Missing");
+    console.log("📌 Current state - gapiInited:", gapiInited, "gisInited:", gisInited);
+    
     // Show loading indicator
     showToast('Updating Google API configuration...', 'info', 5000);
     
     // Reset state
     gapiInited = false;
     gisInited = false;
+    console.log("📌 Reset initialization flags - gapiInited:", gapiInited, "gisInited:", gisInited);
     
     try {
+        if (!window.gapi || !window.gapi.client) {
+            console.error("📌 ERROR: gapi or gapi.client is not available. Scripts may not be loaded properly.");
+            showToast('Failed to update Google API configuration. Scripts not loaded.', 'error');
+            return;
+        }
+        
         // Reinitialize gapi with new API key
+        console.log("📌 Setting new API key to gapi.client");
         gapi.client.setApiKey(CONFIG.API_KEY);
         
         // Reinitialize the client
+        console.log("📌 Reinitializing gapi.client with new configuration");
         gapi.client.init({
             apiKey: CONFIG.API_KEY,
             discoveryDocs: DISCOVERY_DOCS,
         }).then(() => {
+            console.log("📌 gapi.client successfully reinitialized");
             gapiInited = true;
+            console.log("📌 gapiInited set to:", gapiInited);
+            
+            if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
+                console.error("📌 ERROR: google.accounts.oauth2 is not available. Google Identity Services script may not be loaded properly.");
+                showToast('Failed to update Google API configuration. Identity Services not loaded.', 'error');
+                return;
+            }
             
             // Reinitialize token client with new client ID
+            console.log("📌 Reinitializing tokenClient with new CLIENT_ID");
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CONFIG.CLIENT_ID,
                 scope: SCOPES,
                 callback: '', // Will be set later
             });
+            console.log("📌 tokenClient successfully reinitialized");
             gisInited = true;
+            console.log("📌 gisInited set to:", gisInited);
             
             // Check if we're authorized
             if (gapi.client.getToken() !== null) {
+                console.log("📌 Found existing token, refreshing data");
                 // We're already authenticated, refresh the data
                 if (calendarAuthorized) {
                     listCalendarEvents();
@@ -346,16 +428,21 @@ function reinitializeGoogleAPIs() {
                 }
                 showToast('Google API configuration updated successfully!', 'success');
             } else {
+                console.log("📌 No token found, need to re-authenticate");
                 // Need to re-authenticate
                 maybeEnableButtons();
                 showToast('Please sign in again with your Google account', 'warning');
             }
         }).catch(error => {
-            console.error('Error reinitializing Google API client:', error);
+            console.error('📌 Error reinitializing Google API client:', error);
+            console.error('📌 Error message:', error.message);
+            console.error('📌 Error details:', JSON.stringify(error, null, 2));
             showToast('Failed to update Google API configuration. Please check your credentials.', 'error');
         });
     } catch (error) {
-        console.error('Error during Google APIs reinitialization:', error);
+        console.error('📌 Error during Google APIs reinitialization:', error);
+        console.error('📌 Error message:', error.message);
+        console.error('📌 Error stack:', error.stack);
         showToast('Error updating Google API configuration', 'error');
     }
 }
@@ -394,6 +481,55 @@ function saveSettings(settings) {
         
         // Apply settings changes
         const changes = applySettings(settings);
+        
+        // If Google API keys were added for the first time, load Google APIs
+        if (
+            (settings.CLIENT_ID && settings.API_KEY) && 
+            (!previousSettings.CLIENT_ID || !previousSettings.API_KEY || !gapiInited || !gisInited)
+        ) {
+            console.log("Attempting to load Google APIs with new keys");
+            console.log("Previous CLIENT_ID:", previousSettings.CLIENT_ID ? "Set" : "Not set");
+            console.log("Previous API_KEY:", previousSettings.API_KEY ? "Set" : "Not set");
+            console.log("gapiInited:", gapiInited);
+            console.log("gisInited:", gisInited);
+            
+            // Check if scripts are already loaded
+            if (!window.gapi) {
+                console.log("Loading Google API scripts for the first time");
+                // Load the Google API client library
+                const script1 = document.createElement('script');
+                script1.src = 'https://apis.google.com/js/api.js';
+                script1.onload = function() {
+                    console.log("Google API script loaded successfully");
+                    gapiLoaded();
+                };
+                script1.onerror = function() {
+                    console.error("Failed to load Google API script");
+                };
+                document.body.appendChild(script1);
+                
+                // Load the Google Identity Services library
+                const script2 = document.createElement('script');
+                script2.src = 'https://accounts.google.com/gsi/client';
+                script2.onload = function() {
+                    console.log("Google Identity Services script loaded successfully");
+                    gisLoaded();
+                };
+                script2.onerror = function() {
+                    console.error("Failed to load Google Identity Services script");
+                };
+                document.body.appendChild(script2);
+                
+                showToast('Google API configuration saved. Loading API clients...', 'info');
+            } else if (gapiInited && gisInited) {
+                console.log("Reinitializing Google APIs with new keys");
+                // APIs already loaded, just reinitialize with new keys
+                reinitializeGoogleAPIs();
+            } else {
+                console.log("Google API object exists but not initialized. Waiting for initialization.");
+                showToast('Google API configuration saved. Waiting for initialization...', 'info');
+            }
+        }
         
         // Show success toast if any changes were made
         if (changes) {
@@ -451,6 +587,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Set up settings modal
     setupSettingsModal();
     
+    // Set up help buttons
+    setupHelpButtons();
+    
     // Set up title editing
     setupTitleEditing();
     
@@ -462,6 +601,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Set up calendar window dropdown
     setupCalendarWindowDropdown();
+    
+    // Ensure timezone selector is populated
+    const timezoneSelect = document.getElementById('timezone-select');
+    if (timezoneSelect) {
+        populateTimezones(timezoneSelect);
+    }
     
     // Only attempt to load APIs if keys are provided and weather is enabled
     if (CONFIG.WEATHER_API_KEY && CONFIG.SHOW_WEATHER !== false) {
@@ -493,24 +638,38 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.appendChild(script2);
         
         // Add event listeners for refresh buttons
-        document.getElementById('refresh-calendar').addEventListener('click', () => {
-            if (calendarAuthorized) {
-                listCalendarEvents();
-            }
-        });
+        const refreshCalendarBtn = document.getElementById('refresh-calendar');
+        if (refreshCalendarBtn) {
+            refreshCalendarBtn.addEventListener('click', () => {
+                if (calendarAuthorized) {
+                    listCalendarEvents();
+                }
+            });
+        }
         
-        document.getElementById('refresh-tasks').addEventListener('click', () => {
-            if (tasksAuthorized) {
-                listTasks();
-            }
-        });
+        const refreshTasksBtn = document.getElementById('refresh-tasks');
+        if (refreshTasksBtn) {
+            refreshTasksBtn.addEventListener('click', () => {
+                if (tasksAuthorized) {
+                    listTasks();
+                }
+            });
+        }
         
         // Set up the automatic refresh interval
         setupAutoRefresh();
     } else {
         // Show API keys missing error in calendar and tasks sections
-        showError('calendar-section', 'API Keys Missing', 'Please configure Google API credentials in settings to use Calendar integration.');
-        showError('tasks-section', 'API Keys Missing', 'Please configure Google API credentials in settings to use Tasks integration.');
+        const calendarSection = document.getElementById('calendar-section');
+        const tasksSection = document.getElementById('tasks-section');
+        
+        if (calendarSection) {
+            showError('calendar-section', 'API Keys Missing', 'Please configure Google API credentials in settings to use Calendar integration.');
+        }
+        
+        if (tasksSection) {
+            showError('tasks-section', 'API Keys Missing', 'Please configure Google API credentials in settings to use Tasks integration.');
+        }
     }
 });
 
@@ -566,10 +725,31 @@ function setupTitleEditing() {
 
 // Initialize the Google API client library
 function gapiLoaded() {
+    console.log("📌 gapiLoaded() called - Starting Google API client loading process");
+    console.log("📌 CONFIG.API_KEY:", CONFIG.API_KEY ? "Present (length:" + CONFIG.API_KEY.length + ")" : "Missing");
+    console.log("📌 CONFIG.CLIENT_ID:", CONFIG.CLIENT_ID ? "Present (length:" + CONFIG.CLIENT_ID.length + ")" : "Missing");
+    
     try {
-        gapi.load('client', initializeGapiClient);
+        console.log("📌 Attempting to load gapi.client");
+        gapi.load('client', {
+            callback: function() {
+                console.log("📌 gapi.client successfully loaded");
+                initializeGapiClient();
+            },
+            onerror: function(error) {
+                console.error("📌 Error loading gapi.client:", error);
+                showError('calendar-section', 'Google API Error', 'Failed to load Google API client. Check console for details.');
+                showError('tasks-section', 'Google API Error', 'Failed to load Google API client. Check console for details.');
+            },
+            timeout: 10000, // 10 seconds
+            ontimeout: function() {
+                console.error("📌 Timeout loading gapi.client");
+                showError('calendar-section', 'Google API Error', 'Timeout loading Google API client.');
+                showError('tasks-section', 'Google API Error', 'Timeout loading Google API client.');
+            }
+        });
     } catch (error) {
-        console.error('Error loading Google API client:', error);
+        console.error('📌 Error in gapiLoaded function:', error);
         showError('calendar-section', 'Google API Error', 'Failed to load Google API client. Please try again later.');
         showError('tasks-section', 'Google API Error', 'Failed to load Google API client. Please try again later.');
     }
@@ -577,15 +757,24 @@ function gapiLoaded() {
 
 // Initialize the Google API client with your API key and discovery docs
 async function initializeGapiClient() {
+    console.log("📌 initializeGapiClient() called");
+    console.log("📌 Using API Key:", CONFIG.API_KEY ? "Present (length:" + CONFIG.API_KEY.length + ")" : "Missing");
+    console.log("📌 Discovery Docs:", DISCOVERY_DOCS);
+    
     try {
+        console.log("📌 Calling gapi.client.init with API key");
         await gapi.client.init({
             apiKey: CONFIG.API_KEY,
             discoveryDocs: DISCOVERY_DOCS,
         });
+        console.log("📌 gapi.client.init completed successfully");
         gapiInited = true;
+        console.log("📌 gapiInited set to:", gapiInited);
         maybeEnableButtons();
     } catch (error) {
-        console.error('Error initializing Google API client:', error);
+        console.error('📌 Detailed error initializing Google API client:', error);
+        console.error('📌 Error message:', error.message);
+        console.error('📌 Error details:', JSON.stringify(error, null, 2));
         showError('calendar-section', 'Google API Error', 'Failed to initialize Google API client. Please check your API key in settings.');
         showError('tasks-section', 'Google API Error', 'Failed to initialize Google API client. Please check your API key in settings.');
     }
@@ -593,16 +782,24 @@ async function initializeGapiClient() {
 
 // Initialize the Google Identity Services client
 function gisLoaded() {
+    console.log("📌 gisLoaded() called - Starting Google Identity Services initialization");
+    console.log("📌 CONFIG.CLIENT_ID:", CONFIG.CLIENT_ID ? "Present (length:" + CONFIG.CLIENT_ID.length + ")" : "Missing");
+    
     try {
+        console.log("📌 Creating tokenClient with CLIENT_ID");
         tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: CONFIG.CLIENT_ID,
             scope: SCOPES,
             callback: '', // Will be set later
         });
+        console.log("📌 tokenClient successfully created:", tokenClient ? "Present" : "Missing");
         gisInited = true;
+        console.log("📌 gisInited set to:", gisInited);
         maybeEnableButtons();
     } catch (error) {
-        console.error('Error initializing Google Identity Services:', error);
+        console.error('📌 Error initializing Google Identity Services:', error);
+        console.error('📌 Error message:', error.message);
+        console.error('📌 Error details:', JSON.stringify(error, null, 2));
         showError('calendar-section', 'Google API Error', 'Failed to initialize Google Identity Services. Please check your Client ID in settings.');
         showError('tasks-section', 'Google API Error', 'Failed to initialize Google Identity Services. Please check your Client ID in settings.');
     }
@@ -610,291 +807,207 @@ function gisLoaded() {
 
 // Enable the authorize buttons if both API clients are initialized
 function maybeEnableButtons() {
+    console.log("📌 maybeEnableButtons() called");
+    console.log("📌 gapiInited:", gapiInited);
+    console.log("📌 gisInited:", gisInited);
+    
     if (gapiInited && gisInited) {
-        document.getElementById('authorize-calendar').onclick = handleCalendarAuthClick;
-        document.getElementById('authorize-tasks').onclick = handleTasksAuthClick;
+        console.log("📌 Both APIs are initialized, setting up auth buttons");
+        
+        const calendarAuthButton = document.getElementById('authorize-calendar');
+        const tasksAuthButton = document.getElementById('authorize-tasks');
+        
+        if (calendarAuthButton) {
+            console.log("📌 Found calendar auth button, attaching click handler");
+            calendarAuthButton.onclick = handleCalendarAuthClick;
+        } else {
+            console.log("📌 WARNING: Calendar auth button not found in the DOM");
+        }
+        
+        if (tasksAuthButton) {
+            console.log("📌 Found tasks auth button, attaching click handler");
+            tasksAuthButton.onclick = handleTasksAuthClick;
+        } else {
+            console.log("📌 WARNING: Tasks auth button not found in the DOM");
+        }
         
         // Check if we have a token in local storage
         const token = localStorage.getItem('gapi_token');
+        console.log("📌 Stored token in localStorage:", token ? "Present" : "Missing");
+        
         if (token) {
             // Try to use the stored token
             try {
+                console.log("📌 Setting stored token to gapi.client");
                 gapi.client.setToken(JSON.parse(token));
+                console.log("📌 Token successfully set, calling auth success handlers");
                 handleCalendarAuthSuccess();
                 handleTasksAuthSuccess();
             } catch (err) {
-                console.error('Error setting stored token:', err);
+                console.error('📌 Error setting stored token:', err);
+                console.error('📌 Token value might be invalid, removing from localStorage');
                 localStorage.removeItem('gapi_token');
             }
+        } else {
+            console.log("📌 No token in localStorage, user will need to authenticate");
         }
+    } else {
+        console.log("📌 APIs not fully initialized yet. Cannot enable buttons.");
     }
 }
 
-// Set up the settings modal
-function setupSettingsModal() {
-    const settingsButton = document.getElementById('settings-button');
-    const settingsModal = document.getElementById('settings-modal');
-    const modalOverlay = document.getElementById('modal-overlay');
-    const closeModalBtn = settingsModal.querySelector('.close-modal');
-    const saveButton = document.getElementById('settings-save');
-    
-    // Get all form elements
-    const clientIdInput = document.getElementById('google-client-id');
-    const apiKeyInput = document.getElementById('google-api-key');
-    const weatherApiKeyInput = document.getElementById('weather-api-key');
-    const timezoneInput = document.getElementById('timezone-select');
-    const themeToggle = document.getElementById('theme-toggle');
-    const dateToggle = document.getElementById('date-toggle');
-    const weatherToggle = document.getElementById('weather-toggle');
-    const calendarDaysSelect = document.getElementById('calendar-days-select');
-    
-    // Show the modal when settings button is clicked
-    settingsButton.addEventListener('click', () => {
-        // Populate form fields with current values
-        clientIdInput.value = CONFIG.CLIENT_ID || '';
-        apiKeyInput.value = CONFIG.API_KEY || '';
-        weatherApiKeyInput.value = CONFIG.WEATHER_API_KEY || '';
-        timezoneInput.value = CONFIG.TIMEZONE || '';
-        themeToggle.checked = CONFIG.DARK_MODE === true;
-        dateToggle.checked = CONFIG.SHOW_DATE !== false;
-        weatherToggle.checked = CONFIG.SHOW_WEATHER !== false;
-        calendarDaysSelect.value = CONFIG.CALENDAR_DAYS || '7';
-        
-        // Display the modal
-        settingsModal.style.display = 'block';
-        modalOverlay.style.display = 'block';
-    });
-    
-    // Close the modal when X is clicked
-    closeModalBtn.addEventListener('click', () => {
-        settingsModal.style.display = 'none';
-        modalOverlay.style.display = 'none';
-    });
-    
-    // Close the modal when clicking outside
-    modalOverlay.addEventListener('click', () => {
-        settingsModal.style.display = 'none';
-        modalOverlay.style.display = 'none';
-    });
-    
-    // Toggle theme when theme toggle is clicked
-    themeToggle.addEventListener('change', () => {
-        if (themeToggle.checked) {
-            document.body.classList.add('dark-mode');
-            CONFIG.THEME = 'dark';
-        } else {
-            document.body.classList.remove('dark-mode');
-            CONFIG.THEME = 'light';
-        }
-        saveSettings({ THEME: CONFIG.THEME });
-    });
-    
-    // Toggle date display when date toggle is clicked
-    dateToggle.addEventListener('change', () => {
-        CONFIG.SHOW_DATE = dateToggle.checked;
-        saveSettings({ SHOW_DATE: CONFIG.SHOW_DATE });
-        // Update the clock immediately to reflect the change
-        setupClock();
-    });
-    
-    // Toggle weather display when weather toggle is clicked
-    weatherToggle.addEventListener('change', () => {
-        CONFIG.SHOW_WEATHER = weatherToggle.checked;
-        saveSettings({ SHOW_WEATHER: CONFIG.SHOW_WEATHER });
-        // Update the weather display immediately
-        toggleWeatherDisplay(CONFIG.SHOW_WEATHER);
-    });
-    
-    // Save settings when save button is clicked
-    saveButton.addEventListener('click', () => {
-        const settings = {
-            CLIENT_ID: clientIdInput.value.trim(),
-            API_KEY: apiKeyInput.value.trim(),
-            WEATHER_API_KEY: weatherApiKeyInput.value.trim(),
-            TIMEZONE: timezoneInput.value.trim(),
-            DARK_MODE: themeToggle.checked,
-            SHOW_DATE: dateToggle.checked,
-            SHOW_WEATHER: weatherToggle.checked,
-            CALENDAR_DAYS: calendarDaysSelect.value
-        };
-        
-        // Apply and save the settings
-        saveSettings(settings);
-        
-        // Close the modal
-        settingsModal.style.display = 'none';
-        modalOverlay.style.display = 'none';
-    });
-    
-    // Add sign out button to the modal footer
-    const modalFooter = settingsModal.querySelector('.modal-footer');
-    const signOutButton = document.createElement('button');
-    signOutButton.id = 'sign-out-btn';
-    signOutButton.className = 'sign-out-btn';
-    signOutButton.textContent = 'Sign Out of Google';
-    signOutButton.addEventListener('click', revokeTokens);
-    modalFooter.insertBefore(signOutButton, modalFooter.querySelector('.github-link'));
-    
-    // Set up the timezones datalist
-    populateTimezones(timezoneInput);
-}
-
-// Populate timezone dropdown
+// Populate timezone select with IANA timezones
 function populateTimezones(selectElement) {
-    // Create a map of timezones with their GMT offsets
-    const timezoneMap = [
-        {zone: 'Pacific/Honolulu', city: 'Honolulu', offset: -10},
-        {zone: 'America/Anchorage', city: 'Anchorage', offset: -9},
-        {zone: 'America/Los_Angeles', city: 'Los Angeles', offset: -8},
-        {zone: 'America/Denver', city: 'Denver', offset: -7},
-        {zone: 'America/Phoenix', city: 'Phoenix', offset: -7},
-        {zone: 'America/Chicago', city: 'Chicago', offset: -6},
-        {zone: 'America/New_York', city: 'New York', offset: -5},
-        {zone: 'America/Toronto', city: 'Toronto', offset: -5},
-        {zone: 'America/Halifax', city: 'Halifax', offset: -4},
-        {zone: 'America/St_Johns', city: 'St Johns', offset: -3.5},
-        {zone: 'America/Sao_Paulo', city: 'Sao Paulo', offset: -3},
-        {zone: 'America/Buenos_Aires', city: 'Buenos Aires', offset: -3},
-        {zone: 'America/Santiago', city: 'Santiago', offset: -3},
-        {zone: 'Europe/London', city: 'London', offset: 0},
-        {zone: 'Europe/Paris', city: 'Paris', offset: 1},
-        {zone: 'Europe/Berlin', city: 'Berlin', offset: 1},
-        {zone: 'Europe/Madrid', city: 'Madrid', offset: 1},
-        {zone: 'Europe/Rome', city: 'Rome', offset: 1},
-        {zone: 'Europe/Zurich', city: 'Zurich', offset: 1},
-        {zone: 'Europe/Athens', city: 'Athens', offset: 2},
-        {zone: 'Europe/Helsinki', city: 'Helsinki', offset: 2},
-        {zone: 'Europe/Istanbul', city: 'Istanbul', offset: 3},
-        {zone: 'Europe/Moscow', city: 'Moscow', offset: 3},
-        {zone: 'Asia/Dubai', city: 'Dubai', offset: 4},
-        {zone: 'Asia/Tehran', city: 'Tehran', offset: 3.5},
-        {zone: 'Asia/Karachi', city: 'Karachi', offset: 5},
-        {zone: 'Asia/Kolkata', city: 'Kolkata', offset: 5.5},
-        {zone: 'Asia/Bangkok', city: 'Bangkok', offset: 7},
-        {zone: 'Asia/Jakarta', city: 'Jakarta', offset: 7},
-        {zone: 'Asia/Hong_Kong', city: 'Hong Kong', offset: 8},
-        {zone: 'Asia/Shanghai', city: 'Shanghai', offset: 8},
-        {zone: 'Asia/Singapore', city: 'Singapore', offset: 8},
-        {zone: 'Asia/Taipei', city: 'Taipei', offset: 8},
-        {zone: 'Asia/Tokyo', city: 'Tokyo', offset: 9},
-        {zone: 'Asia/Seoul', city: 'Seoul', offset: 9},
-        {zone: 'Australia/Sydney', city: 'Sydney', offset: 10},
-        {zone: 'Australia/Melbourne', city: 'Melbourne', offset: 10},
-        {zone: 'Australia/Brisbane', city: 'Brisbane', offset: 10},
-        {zone: 'Pacific/Auckland', city: 'Auckland', offset: 12}
+    // Clear existing options
+    selectElement.innerHTML = '';
+    
+    // Add Auto option
+    const autoOption = document.createElement('option');
+    autoOption.value = 'auto';
+    autoOption.textContent = 'Auto (System Timezone)';
+    selectElement.appendChild(autoOption);
+    
+    // Common timezones with readable names
+    const commonTimezones = [
+        { zone: 'America/New_York', name: 'US Eastern Time (New York)' },
+        { zone: 'America/Chicago', name: 'US Central Time (Chicago)' },
+        { zone: 'America/Denver', name: 'US Mountain Time (Denver)' },
+        { zone: 'America/Los_Angeles', name: 'US Pacific Time (Los Angeles)' },
+        { zone: 'America/Anchorage', name: 'US Alaska Time (Anchorage)' },
+        { zone: 'America/Honolulu', name: 'US Hawaii Time (Honolulu)' },
+        { zone: 'America/Toronto', name: 'Canada Eastern Time (Toronto)' },
+        { zone: 'Europe/London', name: 'UK Time (London)' },
+        { zone: 'Europe/Paris', name: 'Central European Time (Paris)' },
+        { zone: 'Europe/Berlin', name: 'Central European Time (Berlin)' },
+        { zone: 'Europe/Moscow', name: 'Moscow Time' },
+        { zone: 'Asia/Tokyo', name: 'Japan Time (Tokyo)' },
+        { zone: 'Asia/Shanghai', name: 'China Time (Shanghai)' },
+        { zone: 'Asia/Singapore', name: 'Singapore Time' },
+        { zone: 'Australia/Sydney', name: 'Australia Eastern Time (Sydney)' },
+        { zone: 'Pacific/Auckland', name: 'New Zealand Time (Auckland)' }
     ];
     
-    // Sort by GMT offset
-    timezoneMap.sort((a, b) => a.offset - b.offset);
-    
-    // Create datalist element
-    const datalistId = 'timezone-datalist';
-    let datalist = document.getElementById(datalistId);
-    
-    // If datalist doesn't exist, create it
-    if (!datalist) {
-        datalist = document.createElement('datalist');
-        datalist.id = datalistId;
-        document.body.appendChild(datalist);
-    } else {
-        // Clear existing options
-        datalist.innerHTML = '';
-    }
-    
-    // Add options to datalist
-    timezoneMap.forEach(tz => {
+    // Add timezone options
+    commonTimezones.forEach(tz => {
         const option = document.createElement('option');
         option.value = tz.zone;
-        
-        // Format the offset string (e.g., GMT+8, GMT-5, GMT+5:30)
-        let offsetStr = "GMT";
-        if (tz.offset > 0) {
-            offsetStr += "+";
-        } else if (tz.offset === 0) {
-            offsetStr += "±";
-        }
-        
-        // Handle fractional offsets like 5.5 or 3.5
-        if (Number.isInteger(tz.offset)) {
-            offsetStr += tz.offset;
-        } else {
-            const hours = Math.floor(Math.abs(tz.offset));
-            const minutes = (Math.abs(tz.offset) % 1) * 60;
-            offsetStr += (tz.offset < 0 ? "-" : "") + hours + ":" + minutes;
-        }
-        
-        option.textContent = `(${offsetStr}) ${tz.city}`;
-        datalist.appendChild(option);
+        option.textContent = tz.name;
+        selectElement.appendChild(option);
     });
     
-    // Set the input to use the datalist
-    selectElement.setAttribute('list', datalistId);
-    
-    // Set default to Asia/Singapore if not already set
-    if (!CONFIG.TIMEZONE) {
-        selectElement.value = 'Asia/Singapore';
+    // Set current timezone
+    if (CONFIG.TIMEZONE && CONFIG.TIMEZONE !== 'auto') {
+        selectElement.value = CONFIG.TIMEZONE;
+    } else {
+        selectElement.value = 'auto';
     }
 }
 
 // Handle authorization for Calendar
 function handleCalendarAuthClick() {
+    console.log("📌 handleCalendarAuthClick() called");
+    console.log("📌 tokenClient:", tokenClient ? "Available" : "Missing");
+    
     try {
+        console.log("📌 Setting up tokenClient callback for Calendar auth");
         tokenClient.callback = async (resp) => {
+            console.log("📌 Auth callback received for Calendar:", resp ? "Response received" : "No response");
             if (resp.error !== undefined) {
+                console.error("📌 Auth error in callback:", resp.error);
                 throw resp;
             }
+            console.log("📌 Auth successful, storing token");
             // Store the token in local storage
-            localStorage.setItem('gapi_token', JSON.stringify(gapi.client.getToken()));
+            const token = gapi.client.getToken();
+            console.log("📌 Token obtained:", token ? "Valid token" : "No token received");
+            localStorage.setItem('gapi_token', JSON.stringify(token));
             handleCalendarAuthSuccess();
             handleTasksAuthSuccess(); // Both APIs use the same token
         };
         
         if (gapi.client.getToken() === null) {
+            console.log("📌 No existing token, requesting with consent prompt");
             tokenClient.requestAccessToken({ prompt: 'consent' });
         } else {
+            console.log("📌 Existing token found, requesting without prompt");
             tokenClient.requestAccessToken({ prompt: '' });
         }
     } catch (error) {
-        console.error('Error during Calendar authorization:', error);
+        console.error('📌 Error during Calendar authorization:', error);
+        console.error('📌 Error details:', JSON.stringify(error, null, 2));
         showError('calendar-section', 'Authorization Error', 'Failed to authorize Calendar access. Please try again later.');
     }
 }
 
 // Handle authorization for Tasks
 function handleTasksAuthClick() {
+    console.log("📌 handleTasksAuthClick() called");
+    console.log("📌 tokenClient:", tokenClient ? "Available" : "Missing");
+    
     try {
+        console.log("📌 Setting up tokenClient callback for Tasks auth");
         tokenClient.callback = async (resp) => {
+            console.log("📌 Auth callback received for Tasks:", resp ? "Response received" : "No response");
             if (resp.error !== undefined) {
+                console.error("📌 Auth error in callback:", resp.error);
                 throw resp;
             }
+            console.log("📌 Auth successful, storing token");
             // Store the token in local storage
-            localStorage.setItem('gapi_token', JSON.stringify(gapi.client.getToken()));
+            const token = gapi.client.getToken();
+            console.log("📌 Token obtained:", token ? "Valid token" : "No token received");
+            localStorage.setItem('gapi_token', JSON.stringify(token));
             handleCalendarAuthSuccess(); // Both APIs use the same token
             handleTasksAuthSuccess();
         };
         
         if (gapi.client.getToken() === null) {
+            console.log("📌 No existing token, requesting with consent prompt");
             tokenClient.requestAccessToken({ prompt: 'consent' });
         } else {
+            console.log("📌 Existing token found, requesting without prompt");
             tokenClient.requestAccessToken({ prompt: '' });
         }
     } catch (error) {
-        console.error('Error during Tasks authorization:', error);
+        console.error('📌 Error during Tasks authorization:', error);
+        console.error('📌 Error details:', JSON.stringify(error, null, 2));
         showError('tasks-section', 'Authorization Error', 'Failed to authorize Tasks access. Please try again later.');
     }
 }
 
 // Handle successful Calendar authorization
 function handleCalendarAuthSuccess() {
+    console.log("📌 handleCalendarAuthSuccess() called");
     calendarAuthorized = true;
-    document.getElementById('calendar-login-prompt').classList.add('hidden');
+    console.log("📌 calendarAuthorized set to:", calendarAuthorized);
+    
+    const loginPrompt = document.getElementById('calendar-login-prompt');
+    if (loginPrompt) {
+        console.log("📌 Hiding calendar login prompt");
+        loginPrompt.classList.add('hidden');
+    } else {
+        console.log("📌 WARNING: calendar-login-prompt element not found");
+    }
+    
+    console.log("📌 Calling listCalendarEvents()");
     listCalendarEvents();
 }
 
 // Handle successful Tasks authorization
 function handleTasksAuthSuccess() {
+    console.log("📌 handleTasksAuthSuccess() called");
     tasksAuthorized = true;
-    document.getElementById('tasks-login-prompt').classList.add('hidden');
+    console.log("📌 tasksAuthorized set to:", tasksAuthorized);
+    
+    const loginPrompt = document.getElementById('tasks-login-prompt');
+    if (loginPrompt) {
+        console.log("📌 Hiding tasks login prompt");
+        loginPrompt.classList.add('hidden');
+    } else {
+        console.log("📌 WARNING: tasks-login-prompt element not found");
+    }
+    
+    console.log("📌 Calling listTasks()");
     listTasks();
 }
 
@@ -942,6 +1055,22 @@ function setupNotes() {
             editorTooltip.style.opacity = '0';
         }, 3000);
     });
+    
+    // Toggle send button visibility based on editor content
+    function toggleSendButton() {
+        const content = quill.root.innerHTML.trim();
+        if (content && content !== '<p><br></p>') {
+            noteSendBtn.classList.add('note-send-btn-visible');
+        } else {
+            noteSendBtn.classList.remove('note-send-btn-visible');
+        }
+    }
+    
+    // Check for content when editor changes
+    quill.on('text-change', toggleSendButton);
+    
+    // Initial check
+    toggleSendButton();
     
     // Send note when Enter with Ctrl key is pressed (standard rich text behavior)
     quill.keyboard.addBinding({
@@ -1022,7 +1151,9 @@ function setupNotes() {
         const note = {
             id: Date.now(),
             content: content, // Store HTML content
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            pinned: false,
+            order: 0
         };
         
         // Add to local storage
@@ -1032,6 +1163,9 @@ function setupNotes() {
         
         // Clear input
         quill.root.innerHTML = '';
+        
+        // Hide send button
+        noteSendBtn.classList.remove('note-send-btn-visible');
         
         // Refresh notes display
         loadNotes();
@@ -1060,12 +1194,17 @@ function setupNotes() {
             return;
         }
         
-        // Loop through notes - add newer notes to the top of the list
+        // Loop through notes - add according to sort order
         notes.forEach(note => {
             const noteElement = document.createElement('div');
             noteElement.className = 'note-item';
+            if (note.pinned) {
+                noteElement.classList.add('pinned');
+            }
             noteElement.dataset.id = note.id;
             noteElement.dataset.type = 'note';
+            noteElement.dataset.order = note.order || 0;
+            noteElement.draggable = true; // Enable dragging
             
             // Apply saved color if exists - with extra safeguards
             let tabColor = '';
@@ -1079,6 +1218,9 @@ function setupNotes() {
             
             if (tabColor) {
                 noteElement.style.borderLeftColor = tabColor;
+                if (note.pinned) {
+                    noteElement.style.borderTopColor = tabColor;
+                }
             }
             
             // Format the date in the user's timezone
@@ -1092,22 +1234,32 @@ function setupNotes() {
                 formattedDate = new Date(note.timestamp).toLocaleString();
             }
             
+            // Add drag handle div
+            const dragHandle = document.createElement('div');
+            dragHandle.className = 'note-drag-handle';
+            noteElement.appendChild(dragHandle);
+            
             // No need to parse markdown - display HTML directly
-            noteElement.innerHTML = `
+            const noteContent = document.createElement('div');
+            noteContent.innerHTML = `
                 <div class="note-timestamp">${formattedDate}</div>
                 <div class="note-content">${note.content}</div>
                 <div class="note-actions">
-                    <button class="note-action-btn edit-note">✏️</button>
-                    <button class="note-action-btn delete-note">🗑️</button>
+                    <button class="note-action-btn pin-note" title="${note.pinned ? 'Unpin note' : 'Pin note'}">
+                        <i class="fas ${note.pinned ? 'fa-thumbtack fa-rotate-45' : 'fa-thumbtack'}"></i>
+                    </button>
+                    <button class="note-action-btn edit-note" title="Edit note">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="note-action-btn delete-note" title="Delete note">
+                        <i class="fas fa-trash"></i>
+                    </button>
                 </div>
             `;
+            noteElement.appendChild(noteContent);
             
-            // Insert at the beginning of the list to maintain most recent first
-            if (notesList.firstChild) {
-                notesList.insertBefore(noteElement, notesList.firstChild);
-            } else {
-                notesList.appendChild(noteElement);
-            }
+            // Add to the notes list
+            notesList.appendChild(noteElement);
         });
         
         // Add event listeners for edit and delete buttons
@@ -1161,54 +1313,7 @@ function setupNotes() {
                 // Set content from note
                 editQuill.clipboard.dangerouslyPasteHTML(note.content);
                 
-                // Add tooltips to the edit mode toolbar buttons
-                setTimeout(() => {
-                    const editTooltipData = [
-                        { selector: 'button.ql-bold', text: 'Bold (Ctrl+B)' },
-                        { selector: 'button.ql-italic', text: 'Italic (Ctrl+I)' },
-                        { selector: 'button.ql-underline', text: 'Underline (Ctrl+U)' },
-                        { selector: 'button.ql-strike', text: 'Strikethrough' },
-                        { selector: 'button.ql-blockquote', text: 'Blockquote' },
-                        { selector: 'button.ql-code-block', text: 'Code Block' },
-                        { selector: 'button.ql-list[value="ordered"]', text: 'Numbered List' },
-                        { selector: 'button.ql-list[value="bullet"]', text: 'Bullet List' },
-                        { selector: 'button.ql-link', text: 'Insert Link' },
-                        { selector: 'button.ql-clean', text: 'Clear Formatting' }
-                    ];
-                    
-                    // Find all buttons in the edit toolbar within this specific note
-                    editTooltipData.forEach(({ selector, text }) => {
-                        noteElement.querySelectorAll(selector).forEach(button => {
-                            // Add HTML title attribute for native browser tooltip
-                            button.setAttribute('title', text);
-                            
-                            // Add custom tooltip
-                            button.addEventListener('mouseenter', (e) => {
-                                const tooltip = document.createElement('div');
-                                tooltip.className = 'quill-button-tooltip';
-                                tooltip.textContent = text;
-                                
-                                // Position the tooltip above the button
-                                const rect = button.getBoundingClientRect();
-                                tooltip.style.left = rect.left + (rect.width / 2) + 'px';
-                                tooltip.style.top = rect.top - 5 + 'px'; // Adjusted offset to account for transform
-                                
-                                document.body.appendChild(tooltip);
-                                
-                                // Store the tooltip in a property so we can remove it later
-                                button._tooltip = tooltip;
-                            });
-                            
-                            // Remove tooltip when mouse leaves
-                            button.addEventListener('mouseleave', () => {
-                                if (button._tooltip) {
-                                    button._tooltip.remove();
-                                    button._tooltip = null;
-                                }
-                            });
-                        });
-                    });
-                }, 100); // Short delay to ensure Quill is fully initialized
+                // Short delay to ensure Quill is fully initialized
                 
                 // Add event listeners for save and cancel
                 noteElement.querySelector('.note-edit-btn').addEventListener('click', () => {
@@ -1224,6 +1329,16 @@ function setupNotes() {
                     editArea.replaceWith(contentDiv);
                     noteElement.querySelector('.note-actions').style.display = '';
                 });
+            });
+        });
+        
+        // Add pin button event listeners
+        document.querySelectorAll('.pin-note').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const noteElement = e.target.closest('.note-item');
+                const noteId = parseInt(noteElement.dataset.id);
+                toggleNotePin(noteId);
+                e.stopPropagation(); // Prevent event bubbling
             });
         });
         
@@ -1244,11 +1359,16 @@ function setupNotes() {
                 setTimeout(() => {
                     deleteNote(noteId);
                 }, 300);
+                
+                e.stopPropagation(); // Prevent event bubbling
             });
         });
         
         // Add direct note color functionality
         setupNoteColorListeners();
+        
+        // Add drag and drop functionality
+        setupNoteDragDrop();
     }
     
     // Function to setup color listeners specifically for notes
@@ -1279,7 +1399,19 @@ function setupNotes() {
                 }
             });
             
-            // Re-add any other listeners like edit and delete buttons
+            // Re-add pin button listener
+            const pinBtn = clonedNote.querySelector('.pin-note');
+            if (pinBtn) {
+                pinBtn.addEventListener('click', function(e) {
+                    console.log("Pin button clicked");
+                    const noteElement = e.target.closest('.note-item');
+                    const noteId = parseInt(noteElement.dataset.id);
+                    toggleNotePin(noteId);
+                    e.stopPropagation(); // Prevent event bubbling
+                });
+            }
+            
+            // Re-add edit button listener
             const editBtn = clonedNote.querySelector('.edit-note');
             if (editBtn) {
                 editBtn.addEventListener('click', function(e) {
@@ -1294,14 +1426,27 @@ function setupNotes() {
                 });
             }
             
+            // Re-add delete button listener
             const deleteBtn = clonedNote.querySelector('.delete-note');
             if (deleteBtn) {
                 deleteBtn.addEventListener('click', function(e) {
                     const noteElement = e.target.closest('.note-item');
                     const noteId = parseInt(noteElement.dataset.id);
                     
-                    // Note deletion logic would be here - this is handled elsewhere
-                    e.stopPropagation();
+                    // Remove from DOM with animation
+                    noteElement.style.opacity = '0';
+                    noteElement.style.height = '0';
+                    noteElement.style.margin = '0';
+                    noteElement.style.padding = '0';
+                    noteElement.style.overflow = 'hidden';
+                    noteElement.style.transition = 'all 0.3s ease';
+                    
+                    // Delete from storage and refresh after animation
+                    setTimeout(() => {
+                        deleteNote(noteId);
+                    }, 300);
+                    
+                    e.stopPropagation(); // Prevent event bubbling
                 });
             }
         });
@@ -1337,12 +1482,224 @@ function setupNotes() {
     // Helper function to get notes from local storage
     function getNotes() {
         const notesStr = localStorage.getItem('dashboard_notes');
-        return notesStr ? JSON.parse(notesStr) : [];
+        let notes = notesStr ? JSON.parse(notesStr) : [];
+        
+        // Ensure each note has the required properties
+        notes = notes.map(note => {
+            if (!note.hasOwnProperty('pinned')) {
+                note.pinned = false;
+            }
+            if (!note.hasOwnProperty('order')) {
+                note.order = 0;
+            }
+            return note;
+        });
+        
+        // Sort notes: pinned first, then by order, then by most recent
+        notes.sort((a, b) => {
+            // Pinned notes go first
+            if (a.pinned && !b.pinned) return -1;
+            if (!a.pinned && b.pinned) return 1;
+            
+            // If both pinned or both not pinned, sort by order
+            if (a.order !== b.order) return a.order - b.order;
+            
+            // If order is the same, sort by timestamp (most recent first)
+            return new Date(b.timestamp) - new Date(a.timestamp);
+        });
+        
+        return notes;
     }
     
     // Helper function to save notes to local storage
     function saveNotes(notes) {
         localStorage.setItem('dashboard_notes', JSON.stringify(notes));
+    }
+    
+    // Function to toggle the pinned status of a note
+    function toggleNotePin(noteId) {
+        const notes = getNotes();
+        const noteIndex = notes.findIndex(n => n.id === noteId);
+        
+        if (noteIndex === -1) return;
+        
+        // Toggle pinned status
+        notes[noteIndex].pinned = !notes[noteIndex].pinned;
+        
+        // Save and refresh
+        saveNotes(notes);
+        
+        // Update the UI without full reload if possible
+        const noteElement = document.querySelector(`.note-item[data-id="${noteId}"]`);
+        if (noteElement) {
+            if (notes[noteIndex].pinned) {
+                noteElement.classList.add('pinned');
+                // Copy border-left-color to border-top-color if custom color exists
+                const leftBorderColor = noteElement.style.borderLeftColor;
+                if (leftBorderColor) {
+                    noteElement.style.borderTopColor = leftBorderColor;
+                }
+            } else {
+                noteElement.classList.remove('pinned');
+                noteElement.style.borderTopColor = '';
+            }
+            
+            // Update the pin icon
+            const pinButton = noteElement.querySelector('.pin-note i');
+            if (pinButton) {
+                if (notes[noteIndex].pinned) {
+                    pinButton.className = 'fas fa-thumbtack fa-rotate-45';
+                } else {
+                    pinButton.className = 'fas fa-thumbtack';
+                }
+            }
+            
+            // Re-sort the notes list
+            const notesList = document.getElementById('notes-list');
+            const sortedNotes = getNotes(); // This gets the sorted list
+            
+            // Remove all notes
+            const noteElements = [...notesList.querySelectorAll('.note-item')];
+            noteElements.forEach(el => el.remove());
+            
+            // Re-add in correct order
+            sortedNotes.forEach(note => {
+                const el = noteElements.find(el => parseInt(el.dataset.id) === note.id);
+                if (el) notesList.appendChild(el);
+            });
+        } else {
+            // Fallback to full reload if note element not found
+            loadNotes();
+        }
+        
+        // Show toast notification
+        const pinStatus = notes[noteIndex].pinned ? 'pinned' : 'unpinned';
+        showToast(`Note ${pinStatus}`, 'info', 2000);
+    }
+    
+    // Function to setup drag and drop functionality for notes
+    function setupNoteDragDrop() {
+        const noteItems = document.querySelectorAll('.note-item');
+        const dragHandles = document.querySelectorAll('.note-drag-handle');
+        let draggedItem = null;
+        
+        // Setup drag events for each note
+        noteItems.forEach(note => {
+            // Start drag only from the drag handle
+            note.addEventListener('dragstart', (e) => {
+                // Check if the drag started from the handle or close to the left edge
+                const rect = note.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                
+                // Only allow dragging from the handle area (left 15px)
+                if (clickX > 15) {
+                    e.preventDefault();
+                    return false;
+                }
+                
+                draggedItem = note;
+                
+                // Make it half transparent and add dragging style
+                setTimeout(() => {
+                    note.classList.add('dragging');
+                }, 0);
+                
+                // Set the drag data (required for Firefox)
+                e.dataTransfer.setData('text/plain', note.dataset.id);
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            
+            note.addEventListener('dragend', () => {
+                // Remove the dragging class
+                if (draggedItem) {
+                    draggedItem.classList.remove('dragging');
+                    draggedItem = null;
+                }
+            });
+            
+            // Handle dropping notes
+            note.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                
+                // Get the closest note to drop before or after
+                const afterElement = getDragAfterElement(notesList, e.clientY);
+                
+                if (afterElement == null) {
+                    notesList.appendChild(draggedItem);
+                } else {
+                    notesList.insertBefore(draggedItem, afterElement);
+                }
+            });
+            
+            note.addEventListener('drop', (e) => {
+                e.preventDefault();
+                // The dragover event already handled the visual reordering
+                
+                // Now we need to update the order in our data model
+                updateNotesOrder();
+            });
+        });
+        
+        // Add listeners to the note container for when dragging outside notes
+        notesList.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            // If we're not over a note item, append to the end
+            const afterElement = getDragAfterElement(notesList, e.clientY);
+            if (afterElement == null && draggedItem) {
+                notesList.appendChild(draggedItem);
+            }
+        });
+        
+        notesList.addEventListener('drop', (e) => {
+            e.preventDefault();
+            // Update the order in our data model
+            updateNotesOrder();
+        });
+        
+        // Helper function to determine where to drop the dragged item
+        function getDragAfterElement(container, y) {
+            // Get all notes that aren't currently being dragged
+            const draggableElements = [...container.querySelectorAll('.note-item:not(.dragging)')];
+            
+            // Find the element whose middle is closest to the mouse position
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                
+                // If we're above the middle of an element and closer than the previous closest
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+        
+        // Function to update the order of notes in storage
+        function updateNotesOrder() {
+            const notes = getNotes();
+            const noteItems = notesList.querySelectorAll('.note-item');
+            const newOrderMap = {};
+            
+            // Create a map of note IDs to their new order
+            noteItems.forEach((item, index) => {
+                const noteId = parseInt(item.dataset.id);
+                newOrderMap[noteId] = index;
+            });
+            
+            // Update the order property of each note
+            notes.forEach(note => {
+                if (newOrderMap.hasOwnProperty(note.id)) {
+                    note.order = newOrderMap[note.id];
+                }
+            });
+            
+            // Save the updated notes
+            saveNotes(notes);
+        }
     }
 }
 
@@ -1357,11 +1714,13 @@ function setupClock() {
             let formatted;
             
             if (CONFIG.SHOW_DATE) {
-                // Format with date: 'ddd, dd MMM yyyy HH:mm'
-                formatted = now.toFormat('ccc, dd LLL yyyy HH:mm');
+                // Format with date
+                const timeFormat = CONFIG.CLOCK_24H ? 'HH:mm' : 'h:mm a';
+                formatted = now.toFormat(`ccc, dd LLL yyyy ${timeFormat}`);
             } else {
                 // Format with time only
-                formatted = now.toFormat('HH:mm');
+                const timeFormat = CONFIG.CLOCK_24H ? 'HH:mm' : 'h:mm a';
+                formatted = now.toFormat(timeFormat);
             }
             
             clockElement.textContent = formatted;
@@ -1369,8 +1728,21 @@ function setupClock() {
             // Fallback if there's an error
             console.error('Error updating clock:', error);
             const now = new Date();
-            const hours = String(now.getHours()).padStart(2, '0');
+            let hours = now.getHours();
             const minutes = String(now.getMinutes()).padStart(2, '0');
+            let timeStr = '';
+            
+            // Format the time based on the clock format preference
+            if (CONFIG.CLOCK_24H) {
+                // 24-hour format
+                hours = String(hours).padStart(2, '0');
+                timeStr = `${hours}:${minutes}`;
+            } else {
+                // 12-hour format
+                const period = hours >= 12 ? 'PM' : 'AM';
+                hours = hours % 12 || 12; // Convert to 12-hour format
+                timeStr = `${hours}:${minutes} ${period}`;
+            }
             
             if (CONFIG.SHOW_DATE) {
                 const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -1379,12 +1751,15 @@ function setupClock() {
                 const date = String(now.getDate()).padStart(2, '0');
                 const month = months[now.getMonth()];
                 const year = now.getFullYear();
-                clockElement.textContent = `${day}, ${date} ${month} ${year} ${hours}:${minutes}`;
+                clockElement.textContent = `${day}, ${date} ${month} ${year} ${timeStr}`;
             } else {
-                clockElement.textContent = `${hours}:${minutes}`;
+                clockElement.textContent = timeStr;
             }
         }
     }
+
+    // Store updateClock function globally so it can be called from elsewhere
+    window.updateClockFn = updateClock;
 
     updateClock();
     
@@ -2607,11 +2982,21 @@ function applyColorToItem(itemId, itemType, color) {
     
     if (item) {
         if (color) {
-            // Only apply color to the left border, never to the background
+            // Apply color to the left border
             item.style.borderLeftColor = color;
+            
+            // Also apply to top border if pinned
+            if (item.classList.contains('pinned')) {
+                item.style.borderTopColor = color;
+            }
+            
+            // Also add a custom attribute to help with theme changes
+            item.setAttribute('data-custom-color', color);
         } else {
-            // Reset to default border color
+            // Reset to default border color based on type
             item.style.borderLeftColor = '';
+            item.style.borderTopColor = '';
+            item.removeAttribute('data-custom-color');
         }
         console.log(`Color applied to element:`, item);
     } else {
@@ -2628,55 +3013,36 @@ document.addEventListener('DOMContentLoaded', () => {
         .event-item, .task-item, .note-item {
             position: relative;
             cursor: default;
-            border-left: 8px solid #3498db;
             transition: border-left-color 0.2s ease;
+        }
+        
+        /* Custom color tab indicator */
+        .event-item::before, .task-item::before, .note-item::before {
+            content: '';
+            position: absolute;
+            left: -4px;
+            top: 0;
+            bottom: 0;
+            width: 8px;
             background-color: transparent;
-        }
-        
-        .event-item, .task-item {
-            background-color: #2c2c2c;
-        }
-        
-        .note-item {
-            background-color: #222;
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 3px;
-        }
-        
-        .dark-mode .event-item, .dark-mode .task-item {
-            background-color: #333;
-        }
-        
-        .dark-mode .note-item {
-            background-color: #333;
+            z-index: 5;
+            cursor: pointer;
         }
         
         .event-item:hover::before, .task-item:hover::before, .note-item:hover::before {
-            content: '';
-            position: absolute;
-            left: -8px;
-            top: 0;
-            bottom: 0;
-            width: 15px;
-            cursor: pointer;
-            background-color: rgba(255, 255, 255, 0.1);
+            background-color: var(--tab-hover);
         }
         
         .color-picker-menu {
             position: fixed;
             z-index: 1000;
-            background-color: #fff;
+            background-color: var(--section-bg);
             border-radius: 5px;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 3px 10px var(--section-shadow);
             padding: 10px;
             min-width: 200px;
             max-width: 300px;
-        }
-        
-        .dark-mode .color-picker-menu {
-            background-color: #333;
-            color: #eee;
+            color: var(--text-color);
         }
         
         .preset-colors {
@@ -2699,13 +3065,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         .color-preset.selected {
-            border-color: #fff;
-            box-shadow: 0 0 0 1px #000;
-        }
-        
-        .dark-mode .color-preset.selected {
-            border-color: #333;
-            box-shadow: 0 0 0 1px #fff;
+            border-color: var(--text-color);
+            box-shadow: 0 0 0 1px var(--border-color);
         }
         
         .custom-color-picker {
@@ -2729,14 +3090,10 @@ document.addEventListener('DOMContentLoaded', () => {
         #hex-color {
             flex: 1;
             padding: 5px;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-color);
             border-radius: 3px;
-        }
-        
-        .dark-mode #hex-color {
-            background-color: #444;
-            color: #eee;
-            border-color: #555;
+            background-color: var(--section-bg);
+            color: var(--text-color);
         }
         
         .color-picker-actions {
@@ -2752,22 +3109,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         .reset-color-btn {
-            background-color: #f1f1f1;
-            color: #333;
+            background-color: var(--bg-color);
+            color: var(--text-color);
         }
         
         .apply-color-btn {
-            background-color: #3498db;
+            background-color: var(--accent-color);
             color: white;
-        }
-        
-        .dark-mode .reset-color-btn {
-            background-color: #555;
-            color: #eee;
-        }
-        
-        .dark-mode .apply-color-btn {
-            background-color: #2980b9;
         }
     `;
     document.head.appendChild(style);
@@ -3002,4 +3350,340 @@ function revokeTokens() {
         console.error('Error revoking token:', error);
         showToast('Error revoking tokens', 'error');
     }
-} 
+}
+
+// Set up help buttons
+function setupHelpButtons() {
+    const helpDialog = document.getElementById('help-dialog');
+    const helpDialogContent = document.getElementById('help-dialog-content');
+    const closeHelpBtn = document.getElementById('help-dialog-close');
+    const modalOverlay = document.getElementById('modal-overlay');
+    
+    // Help content for each help topic
+    const helpContent = {
+        'oauth-client-id': `
+            <h3>Google API Client ID</h3>
+            <p>The Client ID is required for authentication with Google services.</p>
+            <p>To get a Client ID:</p>
+            <ol>
+                <li>Go to the <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></li>
+                <li>Create a new project or select an existing one</li>
+                <li>Navigate to "APIs & Services" > "Credentials"</li>
+                <li>Click "Create Credentials" and select "OAuth client ID"</li>
+                <li>Set the application type to "Web application"</li>
+                <li>Add your domain to the authorized JavaScript origins</li>
+                <li>Click "Create" and copy the Client ID</li>
+            </ol>
+        `,
+        'google-api-key': `
+            <h3>Google API Key</h3>
+            <p>The API Key is required to access Google Calendar and Tasks APIs.</p>
+            <p>To get an API Key:</p>
+            <ol>
+                <li>Go to the <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></li>
+                <li>Create a new project or select an existing one</li>
+                <li>Navigate to "APIs & Services" > "Credentials"</li>
+                <li>Click "Create Credentials" and select "API Key"</li>
+                <li>Copy the API Key</li>
+                <li>Optionally restrict the key to only Calendar and Tasks APIs</li>
+            </ol>
+            <p>You also need to enable the Google Calendar API and Tasks API in the "APIs & Services" > "Library" section.</p>
+        `,
+        'weather-api-key': `
+            <h3>OpenWeatherMap API Key</h3>
+            <p>This key is required to display weather information.</p>
+            <p>To get an OpenWeatherMap API Key:</p>
+            <ol>
+                <li>Go to <a href="https://openweathermap.org/" target="_blank">OpenWeatherMap</a> and create an account</li>
+                <li>After logging in, go to your profile > "API Keys"</li>
+                <li>Generate a new API key or use the default one provided</li>
+                <li>Copy the key and paste it here</li>
+            </ol>
+            <p>Note: New API keys may take a few hours to activate.</p>
+        `
+    };
+    
+    // Close help dialog when close button is clicked
+    closeHelpBtn.addEventListener('click', () => {
+        helpDialog.style.display = 'none';
+        modalOverlay.style.display = 'none';
+    });
+    
+    // Close help dialog when clicking outside
+    modalOverlay.addEventListener('click', () => {
+        if (helpDialog.style.display === 'block') {
+            helpDialog.style.display = 'none';
+            modalOverlay.style.display = 'none';
+        }
+    });
+    
+    // Add click event listeners to all help buttons
+    document.querySelectorAll('.help-button').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const helpTopic = button.getAttribute('data-help');
+            if (helpTopic && helpContent[helpTopic]) {
+                helpDialogContent.innerHTML = helpContent[helpTopic];
+                helpDialog.style.display = 'block';
+                modalOverlay.style.display = 'block';
+                e.stopPropagation(); // Prevent event bubbling to modal overlay
+            }
+        });
+    });
+}
+
+// Set up settings modal
+function setupSettingsModal() {
+    console.log("📌 setupSettingsModal() called");
+    const settingsButton = document.getElementById('settings-button');
+    const settingsModal = document.getElementById('settings-modal');
+    const modalOverlay = document.getElementById('modal-overlay');
+    const closeModalBtn = settingsModal.querySelector('.close-modal');
+    const saveSettingsBtn = document.getElementById('settings-save');
+    
+    console.log("📌 Settings modal elements:", {
+        settingsButton: !!settingsButton,
+        settingsModal: !!settingsModal,
+        modalOverlay: !!modalOverlay,
+        closeModalBtn: !!closeModalBtn,
+        saveSettingsBtn: !!saveSettingsBtn
+    });
+    
+    // Get all form elements
+    const clientIdInput = document.getElementById('google-client-id');
+    const apiKeyInput = document.getElementById('google-api-key');
+    const weatherApiKeyInput = document.getElementById('weather-api-key');
+    const timezoneInput = document.getElementById('timezone-select');
+    const themeToggle = document.getElementById('theme-toggle');
+    const dateToggle = document.getElementById('date-toggle');
+    const weatherToggle = document.getElementById('weather-toggle');
+    const calendarDaysSelect = document.getElementById('calendar-days-select');
+    const clockFormatToggle = document.getElementById('clock-format-toggle');
+    
+    console.log("📌 Form elements:", {
+        clientIdInput: !!clientIdInput,
+        apiKeyInput: !!apiKeyInput,
+        weatherApiKeyInput: !!weatherApiKeyInput,
+        timezoneInput: !!timezoneInput,
+        themeToggle: !!themeToggle,
+        dateToggle: !!dateToggle,
+        weatherToggle: !!weatherToggle,
+        calendarDaysSelect: !!calendarDaysSelect,
+        clockFormatToggle: !!clockFormatToggle
+    });
+    
+    // Populate the timezone dropdown
+    if (timezoneInput) {
+        populateTimezones(timezoneInput);
+    }
+    
+    // Open modal when settings button is clicked
+    if (settingsButton) {
+        settingsButton.addEventListener('click', () => {
+            // Populate form fields with current settings
+            if (clientIdInput) clientIdInput.value = CONFIG.CLIENT_ID || '';
+            if (apiKeyInput) apiKeyInput.value = CONFIG.API_KEY || '';
+            if (weatherApiKeyInput) weatherApiKeyInput.value = CONFIG.WEATHER_API_KEY || '';
+            
+            // Set timezone dropdown
+            if (timezoneInput && CONFIG.TIMEZONE) {
+                timezoneInput.value = CONFIG.TIMEZONE;
+            }
+            
+            // Set toggle switches
+            if (themeToggle) themeToggle.checked = CONFIG.THEME === 'dark';
+            if (dateToggle) dateToggle.checked = CONFIG.SHOW_DATE === true;
+            if (weatherToggle) weatherToggle.checked = CONFIG.SHOW_WEATHER !== false;
+            if (clockFormatToggle) clockFormatToggle.checked = !CONFIG.CLOCK_24H;
+            
+            // Set calendar days
+            if (calendarDaysSelect && CONFIG.CALENDAR_DAYS) {
+                calendarDaysSelect.value = CONFIG.CALENDAR_DAYS.toString();
+            }
+            
+            // Show the modal
+            if (settingsModal) settingsModal.style.display = 'block';
+            if (modalOverlay) modalOverlay.style.display = 'block';
+        });
+    }
+    
+    // Close modal when close button is clicked
+    if (closeModalBtn && settingsModal && modalOverlay) {
+        closeModalBtn.addEventListener('click', () => {
+            settingsModal.style.display = 'none';
+            modalOverlay.style.display = 'none';
+        });
+    }
+    
+    // Close modal when overlay is clicked
+    if (modalOverlay && settingsModal) {
+        modalOverlay.addEventListener('click', () => {
+            settingsModal.style.display = 'none';
+            modalOverlay.style.display = 'none';
+        });
+    }
+    
+    // Theme toggle
+    if (themeToggle) {
+        themeToggle.addEventListener('change', () => {
+            CONFIG.THEME = themeToggle.checked ? 'dark' : 'light';
+            document.body.className = themeToggle.checked ? 'dark-mode' : '';
+            saveSettings(CONFIG);
+        });
+    }
+    
+    // Date toggle
+    if (dateToggle) {
+        dateToggle.addEventListener('change', () => {
+            CONFIG.SHOW_DATE = dateToggle.checked;
+            setupClock();
+            saveSettings(CONFIG);
+        });
+    }
+    
+    // Weather toggle
+    if (weatherToggle) {
+        weatherToggle.addEventListener('change', () => {
+            CONFIG.SHOW_WEATHER = weatherToggle.checked;
+            toggleWeatherDisplay(CONFIG.SHOW_WEATHER);
+            saveSettings(CONFIG);
+        });
+    }
+    
+    // Clock format toggle
+    if (clockFormatToggle) {
+        clockFormatToggle.addEventListener('change', () => {
+            CONFIG.CLOCK_24H = !clockFormatToggle.checked;
+            setupClock();
+            saveSettings(CONFIG);
+        });
+    }
+    
+    // Save settings when save button is clicked
+    if (saveSettingsBtn && settingsModal && modalOverlay) {
+        saveSettingsBtn.addEventListener('click', () => {
+            console.log("📌 Save settings button clicked");
+            
+            const settings = {
+                CLIENT_ID: clientIdInput ? clientIdInput.value.trim() : '',
+                API_KEY: apiKeyInput ? apiKeyInput.value.trim() : '',
+                WEATHER_API_KEY: weatherApiKeyInput ? weatherApiKeyInput.value.trim() : '',
+                TIMEZONE: timezoneInput ? timezoneInput.value.trim() : 'auto',
+                THEME: themeToggle && themeToggle.checked ? 'dark' : 'light',
+                SHOW_DATE: dateToggle ? dateToggle.checked : false,
+                SHOW_WEATHER: weatherToggle ? weatherToggle.checked : true,
+                CALENDAR_DAYS: calendarDaysSelect ? parseInt(calendarDaysSelect.value) : 7,
+                CLOCK_24H: clockFormatToggle ? !clockFormatToggle.checked : true
+            };
+            
+            console.log("📌 New settings to save:", settings);
+            
+            // Apply and save the settings
+            saveSettings(settings);
+            
+            // Close the modal
+            settingsModal.style.display = 'none';
+            modalOverlay.style.display = 'none';
+        });
+    }
+    
+    // Add sign out button to the modal footer
+    if (settingsModal) {
+        const modalFooter = settingsModal.querySelector('.modal-footer');
+        if (modalFooter) {
+            const signOutButton = document.createElement('button');
+            signOutButton.id = 'sign-out-btn';
+            signOutButton.className = 'sign-out-btn';
+            signOutButton.textContent = 'Sign Out of Google';
+            signOutButton.addEventListener('click', revokeTokens);
+            
+            if (modalFooter.querySelector('.github-link')) {
+                modalFooter.insertBefore(signOutButton, modalFooter.querySelector('.github-link'));
+            } else {
+                modalFooter.appendChild(signOutButton);
+            }
+        }
+    }
+}
+
+// Debug function for Google API issues
+function debugGoogleApiIssues() {
+    console.log("=============== GOOGLE API DEBUG INFO ===============");
+    console.log("📌 CONFIG:", {
+        CLIENT_ID: CONFIG.CLIENT_ID ? `${CONFIG.CLIENT_ID.substring(0, 10)}...` : "Missing",
+        API_KEY: CONFIG.API_KEY ? `${CONFIG.API_KEY.substring(0, 10)}...` : "Missing",
+        CLIENT_ID_TYPE: typeof CONFIG.CLIENT_ID,
+        API_KEY_TYPE: typeof CONFIG.API_KEY
+    });
+    
+    console.log("📌 Script loading status:");
+    console.log("  - window.gapi:", typeof window.gapi !== 'undefined' ? "Loaded" : "Not loaded");
+    console.log("  - window.google:", typeof window.google !== 'undefined' ? "Loaded" : "Not loaded");
+    
+    if (typeof window.gapi !== 'undefined') {
+        console.log("  - window.gapi.client:", typeof window.gapi.client !== 'undefined' ? "Loaded" : "Not loaded");
+        
+        if (typeof window.gapi.client !== 'undefined') {
+            console.log("  - window.gapi.client.getToken:", typeof window.gapi.client.getToken === 'function' ? "Available" : "Not available");
+            console.log("  - Current token:", window.gapi.client.getToken() ? "Present" : "None");
+        }
+    }
+    
+    if (typeof window.google !== 'undefined') {
+        console.log("  - window.google.accounts:", typeof window.google.accounts !== 'undefined' ? "Loaded" : "Not loaded");
+        
+        if (typeof window.google.accounts !== 'undefined') {
+            console.log("  - window.google.accounts.oauth2:", typeof window.google.accounts.oauth2 !== 'undefined' ? "Loaded" : "Not loaded");
+        }
+    }
+    
+    console.log("📌 Initialization state:");
+    console.log("  - gapiInited:", gapiInited);
+    console.log("  - gisInited:", gisInited);
+    console.log("  - calendarAuthorized:", calendarAuthorized);
+    console.log("  - tasksAuthorized:", tasksAuthorized);
+    console.log("  - tokenClient:", tokenClient ? "Exists" : "Not created");
+    
+    console.log("📌 DOM Elements:");
+    console.log("  - #calendar-login-prompt:", document.getElementById('calendar-login-prompt') ? "Exists" : "Not found");
+    console.log("  - #tasks-login-prompt:", document.getElementById('tasks-login-prompt') ? "Exists" : "Not found");
+    console.log("  - #authorize-calendar:", document.getElementById('authorize-calendar') ? "Exists" : "Not found");
+    console.log("  - #authorize-tasks:", document.getElementById('authorize-tasks') ? "Exists" : "Not found");
+    
+    console.log("📌 Local Storage:");
+    console.log("  - gapi_token:", localStorage.getItem('gapi_token') ? "Present" : "Not present");
+    console.log("  - dashboard_settings:", localStorage.getItem('dashboard_settings') ? "Present" : "Not present");
+    
+    console.log("📌 Browser environment:");
+    console.log("  - User Agent:", navigator.userAgent);
+    console.log("  - Cookies enabled:", navigator.cookieEnabled);
+    console.log("  - Third-party cookies:", "Check browser settings");
+    console.log("  - Potential blockers:", "Check for ad-blockers, privacy extensions");
+    
+    console.log("=============== END DEBUG INFO ===============");
+    
+    // Tell the user what to do with this info
+    showToast("Debug info logged to console. Press F12 to view.", "info", 5000);
+}
+
+// Run the debug function during initialization
+document.addEventListener('DOMContentLoaded', function() {
+    // Run other initialization first
+    // ...
+
+    // Add debug button to UI
+    const calendarSection = document.getElementById('calendar-section');
+    if (calendarSection) {
+        const sectionControls = calendarSection.querySelector('.section-controls');
+        if (sectionControls) {
+            const debugButton = document.createElement('button');
+            debugButton.className = 'debug-button';
+            debugButton.innerHTML = '<i class="fas fa-bug"></i>';
+            debugButton.title = 'Debug Google API Issues';
+            debugButton.addEventListener('click', debugGoogleApiIssues);
+            sectionControls.appendChild(debugButton);
+        }
+    }
+    
+    // Run debug automatically after 3 seconds
+    setTimeout(debugGoogleApiIssues, 3000);
+});
