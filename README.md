@@ -1,132 +1,106 @@
-# Pash
+# Pash - Personal Dashboard
 
-[![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
-[![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/HTML)
-[![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/CSS)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Electron](https://img.shields.io/badge/Electron-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
-
-**Pash** is a sleek, modern personal dashboard optimized for fullscreen display on a secondary monitor. It brings together all your essential daily information in one elegant, customizable interface.
-
-Say goodbye to constantly switching between apps to check your schedule, tasks, and notes. Pash consolidates everything important in one beautiful, distraction-free dashboard that keeps you focused and organized.
-
-Perfect for professionals working from home, productivity enthusiasts, or anyone who wants to streamline their digital workspace.
-
-![Pash Dashboard Screenshot](https://github.com/darkcnight/Pash/raw/main/screenshots/dashboard.png)
-<!-- *[Add a screenshot of your dashboard here!]* -->
-
-## Key Features
-
-- **Google Calendar integration** - See your upcoming events at a glance (read-only)
-- **Google Tasks integration** - Track your to-dos in one place (read-only)
-- **Personal notes area** with Markdown support and rich text editing
-- **Messaging-style notes UI** with edit, delete, and hover actions
-- **Live clock** with timezone support
-- **Live weather widget** powered by OpenWeatherMap API
-- **Zero backend required** - All data stored in LocalStorage
-- **Full dark mode and light mode** support
-- **Electron desktop app** version for standalone use
-- **Settings page** to customize your experience and manage API keys
-- **Auto-launch** option for Electron version (starts on system boot)
+Pash is a minimalist personal dashboard for your browser. It integrates Google Calendar, Google Tasks, a local notes app with rich text editing, a weather widget (optional), and a clock. Everything is handled client-side; no server or backend is required.
 
 ---
 
-## Screenshots
+## Features
 
-<!-- *[Place additional screenshots of your app here!]* -->
+- ★ View your **Google Calendar** events
+- ★ Manage your **Google Tasks**
+- ★ Create and edit **rich-text notes** (powered by Quill.js)
+- ★ Display **current weather** (requires OpenWeatherMap API key)
+- ★ Live clock (uses **system timezone** automatically)
+- ★ **Dark mode** and **light mode** themes
+- ★ **Persistent settings** saved in your browser (localStorage)
+- ★ **No backend** required
 
-<!-- 
-- Dashboard overview
-- Dark mode
-- Notes section
-- Calendar and tasks
-- Settings panel
--->
+*Stretch goal: an Electron-based app version in the future.*
 
 ---
 
 ## Setup Instructions
 
-### Web Version
+1. **Clone this repository**
 
-1. **Clone the repository**
    ```bash
-   git clone https://github.com/darkcnight/Pash.git
-   cd Pash
+   git clone https://github.com/yourusername/pash.git
    ```
 
-2. **Configure API Keys**
-   - You'll need to set up API keys for Google (Calendar & Tasks) and OpenWeatherMap
-   - See the API Keys section below for detailed instructions
-   - Enter your API keys in the settings panel (⚙️ icon)
+2. **Host the files**
 
-3. **Launch**
-   - Open `index.html` in your browser
-   - For best results, use a modern browser like Chrome, Firefox, or Edge
-   - For proper functionality, either:
-     - Run on a local web server
-     - Use the Electron app version
+   - You can simply open `index.html` in your browser for local use.
+   - For remote hosting, upload to any web server (even basic FTP hosting works).
 
-### Electron App Version (Coming Soon)
+3. **Set up API credentials**
 
-1. **Install Dependencies**
-   ```bash
-   npm install
-   ```
+   - Go to [Google Cloud Console](https://console.cloud.google.com/):
+     - Create OAuth 2.0 Client ID credentials (type: Web Application)
+     - Authorise **JavaScript origins** and **redirect URIs** (e.g., `https://yourdomain.com/pash/`).
+     - **Important:** Redirect URIs must exactly match your deployed URL, **including trailing slashes**.
+   - Enable the **Google Calendar API** and **Google Tasks API**.
+   - (Optional) Sign up for [OpenWeatherMap](https://openweathermap.org/api) to get a free weather API key.
 
-2. **Run the App**
-   ```bash
-   npm start
-   ```
+4. **Configure settings**
 
-3. **Build for Your Platform**
-   ```bash
-   npm run build
-   ```
-   This will create executable files for your operating system.
+   - Open the ⚙️ **Settings** panel on your dashboard.
+   - Enter your **Google API Client ID**, **Google API Key**, and **OpenWeatherMap API Key** if desired.
+   - Customise title, theme, clock format, and other options.
+
+5. **Done!**
 
 ---
 
-## API Keys Setup
+## Screenshots
 
-### Google API (Calendar & Tasks)
+---
 
-1. **Create a Google Cloud Project**
-   - Go to the [Google Cloud Console](https://console.cloud.google.com/)
-   - Create a new project
-   - Enable the Google Calendar API and Google Tasks API
+## Important Notes
 
-2. **Create API Credentials**
-   - Go to "APIs & Services" > "Credentials"
-   - Create an API Key:
-     - Click "Create Credentials" > "API Key"
-     - Copy the generated key for "Google API Key" in Pash settings
-     - Recommended: Restrict the key to only Calendar and Tasks APIs
-   
-   - Create OAuth Client ID:
-     - Click "Create Credentials" > "OAuth client ID"
-     - Application type: "Web application"
-     - Add authorized JavaScript origins for your domain (e.g., `http://localhost:8000`)
-     - Copy the Client ID for "Google API Client ID" in Pash settings
-
-### OpenWeatherMap API
-
-1. **Create an Account**
-   - Sign up at [OpenWeatherMap](https://openweathermap.org/)
-   - Go to your API keys section
-
-2. **Generate an API Key**
-   - Create a new API key if you don't have one
-   - Copy the API key
-   - Paste it into "OpenWeatherMap API Key" in Pash settings
-   - Note: New API keys may take a few hours to activate
+- This app relies entirely on client-side execution. Your data remains on your device.
+- No personal or calendar/task data is ever sent to any third-party servers.
+- Pop-up blockers may interfere with the Google sign-in process.
+- Weather functionality is optional. If you do not configure a weather API key, the widget will not display live data.
+- Future development may include an optional Electron desktop version.
 
 ---
 
 ## License
 
-MIT License (Coming Soon)
+Pash is licensed under the **Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)** license.
+
+### Summary:
+
+- You are free to **share** and **adapt** the code.
+- **Attribution** is required (credit the original author).
+- **Non-commercial use only.** Commercial use is **strictly prohibited** without explicit permission.
+
+For full details, see the official [license description](https://creativecommons.org/licenses/by-nc/4.0/).
 
 ---
 
-*Made with ❤️ by the Darkcnight and Cursor*
+## Roadmap
+
+- Electron integration
+
+---
+
+## Contributing
+
+Contributions are welcome for non-commercial improvements! Submit a pull request or open an issue if you have suggestions or bugs to report.
+
+---
+
+## Acknowledgements
+
+- [Google Identity Services](https://developers.google.com/identity)
+- [Google Calendar API](https://developers.google.com/calendar)
+- [Google Tasks API](https://developers.google.com/tasks)
+- [OpenWeatherMap API](https://openweathermap.org/api)
+- [Quill.js](https://quilljs.com/) for rich text editing
+- [Font Awesome](https://fontawesome.com/) for icons
+
+---
+
+> Dashboard built for personal use and learning purposes. Use responsibly.
+
