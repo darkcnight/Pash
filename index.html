@@ -40,7 +40,29 @@
         <div class="section" id="calendar-section">
             <div class="section-header">
                 <h2 class="section-title">Calendar</h2>
-                <button class="refresh-button" id="refresh-calendar"><i class="fas fa-sync-alt"></i></button>
+                <div class="section-controls">
+                    <button class="calendar-window-btn" id="calendar-window-btn"><i class="fas fa-chevron-down"></i></button>
+                    <button class="refresh-button" id="refresh-calendar"><i class="fas fa-sync-alt"></i></button>
+                </div>
+            </div>
+            <div id="calendar-window-dropdown" class="calendar-window-dropdown">
+                <div class="dropdown-content">
+                    <div class="dropdown-item">
+                        <label for="calendar-window-select">Calendar Window:</label>
+                        <select id="calendar-window-select">
+                            <option value="7">1 Week</option>
+                            <option value="14">2 Weeks</option>
+                            <option value="21">3 Weeks</option>
+                            <option value="28">4 Weeks</option>
+                            <option value="35">5 Weeks</option>
+                            <option value="42">6 Weeks</option>
+                            <option value="49">7 Weeks</option>
+                            <option value="56">8 Weeks</option>
+                            <option value="63">9 Weeks</option>
+                            <option value="70">10 Weeks</option>
+                        </select>
+                    </div>
+                </div>
             </div>
             <div class="section-content" id="calendar-content">
                 <div class="login-prompt" id="calendar-login-prompt">
@@ -54,7 +76,9 @@
         <div class="section" id="tasks-section">
             <div class="section-header">
                 <h2 class="section-title">Tasks</h2>
-                <button class="refresh-button" id="refresh-tasks"><i class="fas fa-sync-alt"></i></button>
+                <div class="section-controls">
+                    <button class="refresh-button" id="refresh-tasks"><i class="fas fa-sync-alt"></i></button>
+                </div>
             </div>
             <div class="section-content" id="tasks-content">
                 <div class="login-prompt" id="tasks-login-prompt">
@@ -105,8 +129,22 @@
                 </div>
                 <div class="settings-group">
                     <label for="timezone-select">Timezone:</label>
-                    <select id="timezone-select">
-                        <!-- Timezones will be populated by JavaScript -->
+                    <input type="text" id="timezone-select" placeholder="Enter your timezone">
+                    <!-- Datalist will be added by JavaScript -->
+                </div>
+                <div class="settings-group">
+                    <label for="calendar-days-select">Calendar Window:</label>
+                    <select id="calendar-days-select">
+                        <option value="7">1 Week</option>
+                        <option value="14">2 Weeks</option>
+                        <option value="21">3 Weeks</option>
+                        <option value="28">4 Weeks</option>
+                        <option value="35">5 Weeks</option>
+                        <option value="42">6 Weeks</option>
+                        <option value="49">7 Weeks</option>
+                        <option value="56">8 Weeks</option>
+                        <option value="63">9 Weeks</option>
+                        <option value="70">10 Weeks</option>
                     </select>
                 </div>
                 <div class="settings-group theme-toggle-container">
@@ -178,7 +216,10 @@
     <div class="help-dialog" id="help-dialog">
         <span class="help-dialog-close" id="help-dialog-close">&times;</span>
         <div id="help-dialog-content"></div>
-                            </div>
+    </div>
+
+    <!-- Toast notification system -->
+    <div id="toast-container" class="toast-container"></div>
 
     <!-- Import luxon.js for better timezone handling -->
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.3.0/build/global/luxon.min.js"></script>

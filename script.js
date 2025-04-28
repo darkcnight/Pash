@@ -8,7 +8,8 @@ let CONFIG = {
     DASHBOARD_TITLE: 'Pash',
     THEME: 'light', // 'light' or 'dark'
     SHOW_DATE: false, // Whether to show date with the time
-    SHOW_WEATHER: true // Whether to show weather in the header
+    SHOW_WEATHER: true, // Whether to show weather in the header
+    CALENDAR_DAYS: 7  // Number of days to pull calendar events (default: 7)
 };
 
 // Load settings from localStorage if available
@@ -56,10 +57,328 @@ function loadSettings() {
     }
 }
 
+// Show a toast notification
+function showToast(message, type = 'info', duration = 3000) {
+    const toastContainer = document.getElementById('toast-container');
+    
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    // Set icon based on type
+    let icon = '';
+    switch (type) {
+        case 'success':
+            icon = '<i class="fas fa-check-circle"></i>';
+            break;
+        case 'error':
+            icon = '<i class="fas fa-exclamation-circle"></i>';
+            break;
+        case 'warning':
+            icon = '<i class="fas fa-exclamation-triangle"></i>';
+            break;
+        case 'info':
+        default:
+            icon = '<i class="fas fa-info-circle"></i>';
+            break;
+    }
+    
+    // Create toast HTML
+    toast.innerHTML = `
+        <div class="toast-icon">${icon}</div>
+        <div class="toast-content">
+            <p class="toast-message">${message}</p>
+        </div>
+        <div class="toast-progress">
+            <div class="toast-progress-bar"></div>
+        </div>
+    `;
+    
+    // Add to container
+    toastContainer.appendChild(toast);
+    
+    // Animate progress bar
+    const progressBar = toast.querySelector('.toast-progress-bar');
+    progressBar.style.transition = `width ${duration}ms linear`;
+    
+    // Start the animation in the next frame to ensure it runs
+    setTimeout(() => {
+        progressBar.style.width = '0%';
+    }, 10);
+    
+    // Remove toast after duration
+    setTimeout(() => {
+        toast.style.animation = 'toast-out 0.3s forwards';
+        setTimeout(() => {
+            toastContainer.removeChild(toast);
+        }, 300);
+    }, duration);
+    
+    return toast;
+}
+
+// Apply settings changes immediately without requiring a page refresh
+function applySettings(changedSettings) {
+    // Track which settings were actually changed
+    let changes = {};
+    
+    // Check each setting type and apply changes accordingly
+    Object.keys(changedSettings).forEach(key => {
+        const oldValue = CONFIG[key];
+        const newValue = changedSettings[key];
+        
+        // Skip if value didn't actually change
+        if (oldValue === newValue) return;
+        
+        // Mark this setting as changed
+        changes[key] = { from: oldValue, to: newValue };
+        
+        // Find and highlight the setting in the UI
+        highlightChangedSetting(key);
+        
+        // Apply specific changes based on setting type
+        switch (key) {
+            case 'CLIENT_ID':
+            case 'API_KEY':
+                // These require reinitialization of the Google API clients
+                if (gapiInited && gisInited) {
+                    // If already initialized, we'd need to reinitialize
+                    reinitializeGoogleAPIs();
+                }
+                break;
+                
+            case 'WEATHER_API_KEY':
+                // Reload weather data with new key
+                if (CONFIG.SHOW_WEATHER !== false) {
+                    // Only if weather is enabled
+                    setupWeather();
+                }
+                break;
+                
+            case 'TIMEZONE':
+                // Update clock
+                setupClock();
+                // Refresh calendar and task dates (if initialized)
+                if (calendarAuthorized) {
+                    // Don't reload data, just refresh the display
+                    refreshCalendarDisplay();
+                }
+                if (tasksAuthorized) {
+                    // Don't reload data, just refresh the display
+                    refreshTasksDisplay();
+                }
+                break;
+                
+            case 'THEME':
+                // Toggle dark mode
+                if (newValue === 'dark') {
+                    document.body.classList.add('dark-mode');
+                } else {
+                    document.body.classList.remove('dark-mode');
+                }
+                break;
+                
+            case 'SHOW_DATE':
+                // Update clock format
+                setupClock();
+                break;
+                
+            case 'SHOW_WEATHER':
+                // Toggle weather visibility
+                toggleWeatherDisplay(newValue);
+                break;
+                
+            case 'CALENDAR_DAYS':
+                // This is handled separately in the existing code
+                break;
+                
+            // Add any other settings as needed
+        }
+    });
+    
+    return Object.keys(changes).length > 0 ? changes : null;
+}
+
+// Highlight a changed setting in the UI
+function highlightChangedSetting(settingKey) {
+    let element;
+    
+    // Find the corresponding element in the settings modal
+    switch (settingKey) {
+        case 'CLIENT_ID':
+            element = document.getElementById('google-client-id');
+            break;
+        case 'API_KEY':
+            element = document.getElementById('google-api-key');
+            break;
+        case 'WEATHER_API_KEY':
+            element = document.getElementById('weather-api-key');
+            break;
+        case 'TIMEZONE':
+            element = document.getElementById('timezone-select');
+            break;
+        case 'CALENDAR_DAYS':
+            element = document.getElementById('calendar-days-select');
+            break;
+        case 'THEME':
+            // Highlight the container instead of the toggle
+            element = document.querySelector('.theme-toggle-container');
+            break;
+        case 'SHOW_DATE':
+        case 'SHOW_WEATHER':
+            // Find appropriate container
+            const containerSelector = settingKey === 'SHOW_DATE' ? 
+                '.theme-toggle-container:nth-of-type(2)' : 
+                '.theme-toggle-container:nth-of-type(3)';
+            element = document.querySelector(containerSelector);
+            break;
+    }
+    
+    if (element) {
+        // Add and then remove the highlight class
+        element.classList.add('setting-changed');
+        // Remove the class after animation completes
+        setTimeout(() => {
+            element.classList.remove('setting-changed');
+        }, 2000);
+    }
+}
+
+// Refresh calendar display without reloading data
+function refreshCalendarDisplay() {
+    if (!calendarAuthorized) return;
+    
+    // If we have cached events, refresh their display
+    const calendarContent = document.getElementById('calendar-content');
+    if (calendarContent && !calendarContent.querySelector('.login-prompt')) {
+        // We have event data, refresh display
+        // Get the events from the last response if available
+        if (window.lastCalendarResponse && window.lastCalendarResponse.result) {
+            displayCalendarEvents(window.lastCalendarResponse.result.items);
+        } else {
+            // If no cached data, we'll need to reload
+            listCalendarEvents();
+        }
+    }
+}
+
+// Refresh tasks display without reloading data
+function refreshTasksDisplay() {
+    if (!tasksAuthorized) return;
+    
+    // If we have cached tasks, refresh their display
+    const tasksContent = document.getElementById('tasks-content');
+    if (tasksContent && !tasksContent.querySelector('.login-prompt')) {
+        // We have task data, refresh display
+        // Get the tasks from the last response if available
+        if (window.lastTasksResponse && window.lastTasksResponse.result) {
+            displayTasks(window.lastTasksResponse.result.items || []);
+        } else {
+            // If no cached data, we'll need to reload
+            listTasks();
+        }
+    }
+}
+
+// Reinitialize Google APIs with new credentials
+function reinitializeGoogleAPIs() {
+    // Show loading indicator
+    showToast('Updating Google API configuration...', 'info', 5000);
+    
+    // Reset state
+    gapiInited = false;
+    gisInited = false;
+    
+    try {
+        // Reinitialize gapi with new API key
+        gapi.client.setApiKey(CONFIG.API_KEY);
+        
+        // Reinitialize the client
+        gapi.client.init({
+            apiKey: CONFIG.API_KEY,
+            discoveryDocs: DISCOVERY_DOCS,
+        }).then(() => {
+            gapiInited = true;
+            
+            // Reinitialize token client with new client ID
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CONFIG.CLIENT_ID,
+                scope: SCOPES,
+                callback: '', // Will be set later
+            });
+            gisInited = true;
+            
+            // Check if we're authorized
+            if (gapi.client.getToken() !== null) {
+                // We're already authenticated, refresh the data
+                if (calendarAuthorized) {
+                    listCalendarEvents();
+                }
+                if (tasksAuthorized) {
+                    listTasks();
+                }
+                showToast('Google API configuration updated successfully!', 'success');
+            } else {
+                // Need to re-authenticate
+                maybeEnableButtons();
+                showToast('Please sign in again with your Google account', 'warning');
+            }
+        }).catch(error => {
+            console.error('Error reinitializing Google API client:', error);
+            showToast('Failed to update Google API configuration. Please check your credentials.', 'error');
+        });
+    } catch (error) {
+        console.error('Error during Google APIs reinitialization:', error);
+        showToast('Error updating Google API configuration', 'error');
+    }
+}
+
 // Save settings to localStorage
 function saveSettings(settings) {
-    CONFIG = { ...CONFIG, ...settings };
-    localStorage.setItem('dashboard_settings', JSON.stringify(CONFIG));
+    try {
+        // Keep track of the previous settings for comparison
+        const previousSettings = { ...CONFIG };
+        
+        // Merge with existing settings
+        CONFIG = { ...CONFIG, ...settings };
+        
+        // Save to localStorage
+        localStorage.setItem('dashboard_settings', JSON.stringify(CONFIG));
+        
+        // Handle immediate setting updates
+        if (settings.CALENDAR_DAYS) {
+            // Update the settings modal dropdown
+            const settingsCalendarWindowSelect = document.getElementById('calendar-days-select');
+            if (settingsCalendarWindowSelect) {
+                settingsCalendarWindowSelect.value = settings.CALENDAR_DAYS.toString();
+            }
+            
+            // Update the calendar section dropdown
+            const calendarWindowSelect = document.getElementById('calendar-window-select');
+            if (calendarWindowSelect) {
+                calendarWindowSelect.value = settings.CALENDAR_DAYS.toString();
+            }
+            
+            // Reload calendar events if authorized
+            if (calendarAuthorized) {
+                listCalendarEvents();
+            }
+        }
+        
+        // Apply settings changes
+        const changes = applySettings(settings);
+        
+        // Show success toast if any changes were made
+        if (changes) {
+            showToast('Settings updated successfully!', 'success');
+        }
+        
+        return true;
+    } catch (err) {
+        console.error('Error saving settings:', err);
+        showToast('Error saving settings: ' + err.message, 'error');
+        return false;
+    }
 }
 
 // Discovery docs and scopes for Calendar and Tasks
@@ -113,6 +432,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Set up clock (with timezone support)
     setupClock();
+    
+    // Set up calendar window dropdown
+    setupCalendarWindowDropdown();
     
     // Only attempt to load APIs if keys are provided and weather is enabled
     if (CONFIG.WEATHER_API_KEY && CONFIG.SHOW_WEATHER !== false) {
@@ -294,6 +616,7 @@ function setupSettingsModal() {
     const apiKeyInput = document.getElementById('google-api-key');
     const weatherApiKeyInput = document.getElementById('weather-api-key');
     const timezoneSelect = document.getElementById('timezone-select');
+    const calendarDaysSelect = document.getElementById('calendar-days-select');
     const themeToggle = document.getElementById('theme-toggle');
     const dateToggle = document.getElementById('date-toggle');
     
@@ -385,6 +708,7 @@ function setupSettingsModal() {
     apiKeyInput.value = CONFIG.API_KEY || '';
     weatherApiKeyInput.value = CONFIG.WEATHER_API_KEY || '';
     timezoneSelect.value = CONFIG.TIMEZONE || 'Asia/Singapore';
+    calendarDaysSelect.value = CONFIG.CALENDAR_DAYS || '7';
     themeToggle.checked = CONFIG.THEME === 'dark';
     dateToggle.checked = CONFIG.SHOW_DATE === true;
     const weatherToggle = document.getElementById('weather-toggle');
@@ -444,6 +768,7 @@ function setupSettingsModal() {
             API_KEY: apiKeyInput.value.trim(),
             WEATHER_API_KEY: weatherApiKeyInput.value.trim(),
             TIMEZONE: timezoneSelect.value,
+            CALENDAR_DAYS: parseInt(calendarDaysSelect.value, 10),
             THEME: themeToggle.checked ? 'dark' : 'light',
             SHOW_DATE: dateToggle.checked,
             SHOW_WEATHER: weatherToggle.checked
@@ -451,41 +776,109 @@ function setupSettingsModal() {
         
         saveSettings(settings);
         
-        // Notify user
-        alert('Settings saved! Please refresh the page for changes to take effect.');
+        // We don't close the modal automatically anymore, let the user close it explicitly
+        // This allows them to see the highlighted changes and make additional changes if needed
         
-        // Close the modal
-        modal.style.display = 'none';
-        modalOverlay.style.display = 'none';
+        // Highlight the save button briefly to indicate success
+        saveButton.classList.add('setting-changed');
+        setTimeout(() => {
+            saveButton.classList.remove('setting-changed');
+        }, 2000);
     });
 }
 
 // Populate timezone dropdown
 function populateTimezones(selectElement) {
-    const timezones = [
-        'Africa/Abidjan', 'Africa/Accra', 'Africa/Algiers', 'Africa/Cairo', 'Africa/Casablanca', 'Africa/Johannesburg', 'Africa/Lagos', 'Africa/Nairobi',
-        'America/Anchorage', 'America/Bogota', 'America/Buenos_Aires', 'America/Caracas', 'America/Chicago', 'America/Denver', 'America/Halifax', 
-        'America/Los_Angeles', 'America/Mexico_City', 'America/New_York', 'America/Phoenix', 'America/Santiago', 'America/Sao_Paulo', 'America/St_Johns', 
-        'America/Toronto', 'America/Vancouver',
-        'Asia/Almaty', 'Asia/Baghdad', 'Asia/Bangkok', 'Asia/Beijing', 'Asia/Beirut', 'Asia/Dhaka', 'Asia/Dubai', 'Asia/Ho_Chi_Minh', 'Asia/Hong_Kong', 
-        'Asia/Jakarta', 'Asia/Jerusalem', 'Asia/Karachi', 'Asia/Kolkata', 'Asia/Kuala_Lumpur', 'Asia/Kuwait', 'Asia/Manila', 'Asia/Riyadh', 'Asia/Seoul', 
-        'Asia/Shanghai', 'Asia/Singapore', 'Asia/Taipei', 'Asia/Tehran', 'Asia/Tokyo',
-        'Australia/Adelaide', 'Australia/Brisbane', 'Australia/Darwin', 'Australia/Melbourne', 'Australia/Perth', 'Australia/Sydney',
-        'Europe/Amsterdam', 'Europe/Athens', 'Europe/Belgrade', 'Europe/Berlin', 'Europe/Brussels', 'Europe/Budapest', 'Europe/Copenhagen', 'Europe/Dublin', 
-        'Europe/Helsinki', 'Europe/Istanbul', 'Europe/Lisbon', 'Europe/London', 'Europe/Madrid', 'Europe/Moscow', 'Europe/Oslo', 'Europe/Paris', 'Europe/Prague', 
-        'Europe/Rome', 'Europe/Stockholm', 'Europe/Vienna', 'Europe/Warsaw', 'Europe/Zurich',
-        'Pacific/Auckland', 'Pacific/Fiji', 'Pacific/Honolulu', 'Pacific/Noumea', 'Pacific/Tahiti'
+    // Create a map of timezones with their GMT offsets
+    const timezoneMap = [
+        {zone: 'Pacific/Honolulu', city: 'Honolulu', offset: -10},
+        {zone: 'America/Anchorage', city: 'Anchorage', offset: -9},
+        {zone: 'America/Los_Angeles', city: 'Los Angeles', offset: -8},
+        {zone: 'America/Denver', city: 'Denver', offset: -7},
+        {zone: 'America/Phoenix', city: 'Phoenix', offset: -7},
+        {zone: 'America/Chicago', city: 'Chicago', offset: -6},
+        {zone: 'America/New_York', city: 'New York', offset: -5},
+        {zone: 'America/Toronto', city: 'Toronto', offset: -5},
+        {zone: 'America/Halifax', city: 'Halifax', offset: -4},
+        {zone: 'America/St_Johns', city: 'St Johns', offset: -3.5},
+        {zone: 'America/Sao_Paulo', city: 'Sao Paulo', offset: -3},
+        {zone: 'America/Buenos_Aires', city: 'Buenos Aires', offset: -3},
+        {zone: 'America/Santiago', city: 'Santiago', offset: -3},
+        {zone: 'Europe/London', city: 'London', offset: 0},
+        {zone: 'Europe/Paris', city: 'Paris', offset: 1},
+        {zone: 'Europe/Berlin', city: 'Berlin', offset: 1},
+        {zone: 'Europe/Madrid', city: 'Madrid', offset: 1},
+        {zone: 'Europe/Rome', city: 'Rome', offset: 1},
+        {zone: 'Europe/Zurich', city: 'Zurich', offset: 1},
+        {zone: 'Europe/Athens', city: 'Athens', offset: 2},
+        {zone: 'Europe/Helsinki', city: 'Helsinki', offset: 2},
+        {zone: 'Europe/Istanbul', city: 'Istanbul', offset: 3},
+        {zone: 'Europe/Moscow', city: 'Moscow', offset: 3},
+        {zone: 'Asia/Dubai', city: 'Dubai', offset: 4},
+        {zone: 'Asia/Tehran', city: 'Tehran', offset: 3.5},
+        {zone: 'Asia/Karachi', city: 'Karachi', offset: 5},
+        {zone: 'Asia/Kolkata', city: 'Kolkata', offset: 5.5},
+        {zone: 'Asia/Bangkok', city: 'Bangkok', offset: 7},
+        {zone: 'Asia/Jakarta', city: 'Jakarta', offset: 7},
+        {zone: 'Asia/Hong_Kong', city: 'Hong Kong', offset: 8},
+        {zone: 'Asia/Shanghai', city: 'Shanghai', offset: 8},
+        {zone: 'Asia/Singapore', city: 'Singapore', offset: 8},
+        {zone: 'Asia/Taipei', city: 'Taipei', offset: 8},
+        {zone: 'Asia/Tokyo', city: 'Tokyo', offset: 9},
+        {zone: 'Asia/Seoul', city: 'Seoul', offset: 9},
+        {zone: 'Australia/Sydney', city: 'Sydney', offset: 10},
+        {zone: 'Australia/Melbourne', city: 'Melbourne', offset: 10},
+        {zone: 'Australia/Brisbane', city: 'Brisbane', offset: 10},
+        {zone: 'Pacific/Auckland', city: 'Auckland', offset: 12}
     ];
     
-    // Add an option for each timezone
-    timezones.forEach(tz => {
+    // Sort by GMT offset
+    timezoneMap.sort((a, b) => a.offset - b.offset);
+    
+    // Create datalist element
+    const datalistId = 'timezone-datalist';
+    let datalist = document.getElementById(datalistId);
+    
+    // If datalist doesn't exist, create it
+    if (!datalist) {
+        datalist = document.createElement('datalist');
+        datalist.id = datalistId;
+        document.body.appendChild(datalist);
+    } else {
+        // Clear existing options
+        datalist.innerHTML = '';
+    }
+    
+    // Add options to datalist
+    timezoneMap.forEach(tz => {
         const option = document.createElement('option');
-        option.value = tz;
-        option.textContent = tz.replace('_', ' ');
-        selectElement.appendChild(option);
+        option.value = tz.zone;
+        
+        // Format the offset string (e.g., GMT+8, GMT-5, GMT+5:30)
+        let offsetStr = "GMT";
+        if (tz.offset > 0) {
+            offsetStr += "+";
+        } else if (tz.offset === 0) {
+            offsetStr += "±";
+        }
+        
+        // Handle fractional offsets like 5.5 or 3.5
+        if (Number.isInteger(tz.offset)) {
+            offsetStr += tz.offset;
+        } else {
+            const hours = Math.floor(Math.abs(tz.offset));
+            const minutes = (Math.abs(tz.offset) % 1) * 60;
+            offsetStr += (tz.offset < 0 ? "-" : "") + hours + ":" + minutes;
+        }
+        
+        option.textContent = `(${offsetStr}) ${tz.city}`;
+        datalist.appendChild(option);
     });
     
-    // Set default to Asia/Singapore
+    // Set the input to use the datalist
+    selectElement.setAttribute('list', datalistId);
+    
+    // Set default to Asia/Singapore if not already set
     if (!CONFIG.TIMEZONE) {
         selectElement.value = 'Asia/Singapore';
     }
@@ -1169,9 +1562,10 @@ function listCalendarEvents() {
             clearHiddenItemsByType('event');
         });
         
-        // Add after refresh button
-        const refreshBtn = document.getElementById('refresh-calendar');
-        headerSection.insertBefore(showHiddenBtn, refreshBtn);
+        // Fix: Get the section-controls div instead of the header section
+        const sectionControls = headerSection.querySelector('.section-controls');
+        // Insert at the beginning of section-controls (before any other buttons)
+        sectionControls.insertBefore(showHiddenBtn, sectionControls.firstChild);
     }
     
     // Show loading state
@@ -1186,8 +1580,8 @@ function listCalendarEvents() {
         today = DateTime.now().startOf('day');
     }
     
-    // Get events up to a week from now
-    let nextWeek = today.plus({ days: 60 });
+    // Get events up to specified number of days from now
+    let nextWeek = today.plus({ days: CONFIG.CALENDAR_DAYS });
     
     try {
         gapi.client.calendar.events.list({
@@ -1197,6 +1591,9 @@ function listCalendarEvents() {
             'singleEvents': true,
             'orderBy': 'startTime'
         }).then(response => {
+            // Store the response for later use
+            window.lastCalendarResponse = response;
+            
             const events = response.result.items;
             displayCalendarEvents(events);
             statusIndicator.textContent = `Last updated: ${DateTime.now().setZone(CONFIG.TIMEZONE).toLocaleString(DateTime.TIME_SIMPLE)}`;
@@ -1341,16 +1738,17 @@ function listTasks() {
             clearHiddenItemsByType('task');
         });
         
-        // Add after refresh button
-        const refreshBtn = document.getElementById('refresh-tasks');
-        headerSection.insertBefore(showHiddenBtn, refreshBtn);
+        // Fix: Get the section-controls div instead of the header section
+        const sectionControls = headerSection.querySelector('.section-controls');
+        // Insert at the beginning of section-controls (before the refresh button)
+        sectionControls.insertBefore(showHiddenBtn, sectionControls.firstChild);
     }
     
     // Show loading state
     statusIndicator.innerHTML = 'Loading tasks... <div class="loader"></div>';
     
     try {
-        // Get the default task list
+        // Get the default task list - Fix the API call
         gapi.client.tasks.tasklists.list({
             'maxResults': 1
         }).then(response => {
@@ -1363,6 +1761,9 @@ function listTasks() {
                 'tasklist': taskList.id
             });
         }).then(response => {
+            // Store the response for later use
+            window.lastTasksResponse = response;
+            
             const tasks = response.result.items || [];
             displayTasks(tasks);
             
@@ -1572,4 +1973,55 @@ function clearHiddenItemsByType(type) {
     } else if (type === 'task' && tasksAuthorized) {
         listTasks();
     }
+}
+
+// Set up calendar window dropdown functionality
+function setupCalendarWindowDropdown() {
+    const calendarWindowBtn = document.getElementById('calendar-window-btn');
+    const calendarWindowDropdown = document.getElementById('calendar-window-dropdown');
+    const calendarWindowSelect = document.getElementById('calendar-window-select');
+    const settingsCalendarWindowSelect = document.getElementById('calendar-days-select');
+    
+    // Hide dropdown initially
+    calendarWindowDropdown.style.display = 'none';
+    
+    // Set initial value from CONFIG
+    calendarWindowSelect.value = CONFIG.CALENDAR_DAYS || '7';
+    
+    // Toggle dropdown visibility when button is clicked
+    calendarWindowBtn.addEventListener('click', () => {
+        if (calendarWindowDropdown.style.display === 'none') {
+            calendarWindowDropdown.style.display = 'block';
+        } else {
+            calendarWindowDropdown.style.display = 'none';
+        }
+    });
+    
+    // Handle value change
+    calendarWindowSelect.addEventListener('change', () => {
+        const newValue = parseInt(calendarWindowSelect.value, 10);
+        
+        // Save to CONFIG and update settings modal dropdown
+        CONFIG.CALENDAR_DAYS = newValue;
+        if (settingsCalendarWindowSelect) {
+            settingsCalendarWindowSelect.value = newValue.toString();
+        }
+        
+        // Save the settings and reload calendar events
+        saveSettings({ CALENDAR_DAYS: newValue });
+        
+        // Close the dropdown
+        calendarWindowDropdown.style.display = 'none';
+    });
+    
+    // Close the dropdown when clicking outside
+    document.addEventListener('click', (event) => {
+        if (!calendarWindowBtn.contains(event.target) && 
+            !calendarWindowDropdown.contains(event.target)) {
+            calendarWindowDropdown.style.display = 'none';
+        }
+    });
+    
+    // Update synchronization in the setupSettingsModal function
+    // This will be handled by modifying the saveSettings function to update both dropdowns
 } 
