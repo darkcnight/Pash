@@ -1,6 +1,8 @@
 # Pash - Personal Dashboard
 
-Pash is a minimalist personal dashboard for your browser. It integrates Google Calendar, Google Tasks, a local notes app with rich text editing, a weather widget (optional), and a clock. Everything is handled client-side; no server or backend is required.
+[![PWA](https://img.shields.io/badge/PWA-ready-blue?logo=pwa)](https://web.dev/progressive-web-apps/)
+
+Pash is a minimalist personal dashboard for your browser. It integrates Google Calendar, Google Tasks, a local notes app with rich text editing, a weather widget (optional), and a clock. Everything is handled client-side; no server or backend is required. Pash is also a Progressive Web App (PWA) that can be installed on your desktop or mobile device.
 
 ---
 
@@ -14,6 +16,8 @@ Pash is a minimalist personal dashboard for your browser. It integrates Google C
 - ★ **Dark mode** and **light mode** themes
 - ★ **Persistent settings** saved in your browser (localStorage)
 - ★ **No backend** required
+- ★ **PWA support** - install on desktop or mobile
+- ★ **Rearrangeable sections** - drag and drop to customize layout
 
 *Stretch goal: an Electron-based app version in the future.*
 
@@ -48,6 +52,33 @@ Pash is a minimalist personal dashboard for your browser. It integrates Google C
    - Customise title, theme, clock format, and other options.
 
 5. **Done!**
+
+---
+
+## Using as a Progressive Web App (PWA)
+
+Pash can be installed as a standalone app on most devices and platforms:
+
+### Desktop Installation (Chrome, Edge):
+1. Visit your Pash installation in the browser
+2. Look for the install icon (⊕) in the address bar or menu
+3. Click "Install" when prompted
+
+### Mobile Installation (Android):
+1. Visit your Pash installation in Chrome
+2. Tap the menu (⋮) button
+3. Select "Add to Home screen"
+
+### iOS Installation (Safari):
+1. Visit your Pash installation in Safari
+2. Tap the Share (↑) button
+3. Select "Add to Home Screen"
+
+**Benefits of using Pash as a PWA:**
+- Runs in its own window without browser UI
+- Adds a desktop/home screen icon for quick access
+- Faster loading through caching
+- Basic offline capabilities for the UI components
 
 ---
 
@@ -99,6 +130,9 @@ Contributions are welcome for non-commercial improvements! Submit a pull request
 - [OpenWeatherMap API](https://openweathermap.org/api)
 - [Quill.js](https://quilljs.com/) for rich text editing
 - [Font Awesome](https://fontawesome.com/) for icons
+- [Sortable.js](https://sortablejs.github.io/Sortable/) for drag-and-drop functionality
+- [Service Workers API](https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API) for PWA offline support
+- [Web App Manifest](https://developer.mozilla.org/en-US/docs/Web/Manifest) for PWA installability
 
 ---
 
