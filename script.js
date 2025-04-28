@@ -1278,39 +1278,51 @@ function setupNotes() {
                 noteElement.querySelector('.note-content').replaceWith(editArea);
                 noteElement.querySelector('.note-actions').style.display = 'none';
                 
-                // Initialize a Quill instance for editing
-                const editQuill = new Quill(`#quill-edit-${noteId}`, {
-                    theme: 'snow',
-                    modules: {
-                        toolbar: [
-                            ['bold', 'italic', 'underline', 'strike'],
-                            ['blockquote', 'code-block'],
-                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                            ['link'],
-                            ['clean']
-                        ]
-                    }
-                });
+                // Declare editQuill variable here so it's accessible in listeners
+                let editQuill = null;
+
+                // Defer Quill initialization slightly to ensure DOM is ready
+                setTimeout(() => {
+                     // Initialize a Quill instance for editing
+                    editQuill = new Quill(`#quill-edit-${noteId}`, {
+                        theme: 'snow',
+                        modules: {
+                            toolbar: [
+                                ['bold', 'italic', 'underline', 'strike'],
+                                ['blockquote', 'code-block'],
+                                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                                ['link'],
+                                ['clean']
+                            ]
+                        }
+                    });
+                    
+                    // Set content from note
+                    editQuill.clipboard.dangerouslyPasteHTML(note.content);
+                    
+                    // Focus the editor
+                    editQuill.focus();
+
+                    // Add event listeners for save and cancel INSIDE the timeout
+                    // after editQuill is defined
+                    noteElement.querySelector('.note-edit-btn').addEventListener('click', () => {
+                        if (editQuill) { // Check if editor exists
+                            const htmlContent = editQuill.root.innerHTML;
+                            saveEditedNote(noteId, htmlContent);
+                        }
+                    });
+                    
+                    noteElement.querySelector('.note-cancel-btn').addEventListener('click', () => {
+                        // Restore original content view
+                        const contentDiv = document.createElement('div');
+                        contentDiv.className = 'note-content';
+                        contentDiv.innerHTML = originalContent;
+                        editArea.replaceWith(contentDiv);
+                        noteElement.querySelector('.note-actions').style.display = '';
+                    });
+
+                }, 0); // Timeout 0 defers execution slightly
                 
-                // Set content from note
-                editQuill.clipboard.dangerouslyPasteHTML(note.content);
-                
-                // Short delay to ensure Quill is fully initialized
-                
-                // Add event listeners for save and cancel
-                noteElement.querySelector('.note-edit-btn').addEventListener('click', () => {
-                    const htmlContent = editQuill.root.innerHTML;
-                    saveEditedNote(noteId, htmlContent);
-                });
-                
-                noteElement.querySelector('.note-cancel-btn').addEventListener('click', () => {
-                    // Restore original content
-                    const contentDiv = document.createElement('div');
-                    contentDiv.className = 'note-content';
-                    contentDiv.innerHTML = originalContent;
-                    editArea.replaceWith(contentDiv);
-                    noteElement.querySelector('.note-actions').style.display = '';
-                });
             });
         });
         
@@ -1397,14 +1409,91 @@ function setupNotes() {
             const editBtn = clonedNote.querySelector('.edit-note');
             if (editBtn) {
                 editBtn.addEventListener('click', function(e) {
-                    const noteElement = e.target.closest('.note-item');
+                    e.stopPropagation(); // Prevent triggering color picker
+                    const noteElement = this.closest('.note-item');
                     const noteId = parseInt(noteElement.dataset.id);
                     const note = getNotes().find(n => n.id === noteId);
                     
                     if (!note) return;
                     
-                    // Note editing logic would be here - this is handled elsewhere
-                    e.stopPropagation();
+                    // Store the original content for cancel action
+                    const originalContent = note.content; // Get original from data
+                    
+                    // Create a temporary Quill editor for editing
+                    const editArea = document.createElement('div');
+                    editArea.className = 'note-edit';
+                    
+                    const editContainer = document.createElement('div');
+                    editContainer.id = `quill-edit-${noteId}`;
+                    editContainer.className = 'quill-edit-container';
+                    
+                    const buttonContainer = document.createElement('div');
+                    buttonContainer.className = 'note-edit-buttons';
+                    buttonContainer.innerHTML = `
+                        <button class="note-cancel-btn">Cancel</button>
+                        <button class="note-edit-btn">Save</button>
+                    `;
+                    
+                    editArea.appendChild(editContainer);
+                    editArea.appendChild(buttonContainer);
+                    
+                    // Find the current content display and replace it
+                    const currentContentDiv = noteElement.querySelector('.note-content');
+                    if (currentContentDiv) {
+                         currentContentDiv.replaceWith(editArea);
+                    } else {
+                        // Fallback if .note-content isn't found directly (shouldn't happen)
+                        const noteTimestamp = noteElement.querySelector('.note-timestamp');
+                        if(noteTimestamp) noteTimestamp.insertAdjacentElement('afterend', editArea);
+                    }
+                   
+                    noteElement.querySelector('.note-actions').style.display = 'none';
+
+                    // Declare editQuill variable here so it's accessible in listeners
+                    let editQuill = null;
+
+                    // Defer Quill initialization slightly to ensure DOM is ready
+                    setTimeout(() => {
+                         // Initialize a Quill instance for editing
+                        editQuill = new Quill(`#quill-edit-${noteId}`, {
+                            theme: 'snow',
+                            modules: {
+                                toolbar: [
+                                    ['bold', 'italic', 'underline', 'strike'],
+                                    ['blockquote', 'code-block'],
+                                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                                    ['link'],
+                                    ['clean']
+                                ]
+                            }
+                        });
+                        
+                        // Set content from note
+                        editQuill.clipboard.dangerouslyPasteHTML(note.content);
+                        
+                        // Focus the editor
+                        editQuill.focus();
+
+                        // Add event listeners for save and cancel INSIDE the timeout
+                        // after editQuill is defined
+                        noteElement.querySelector('.note-edit-btn').addEventListener('click', () => {
+                            if (editQuill) { // Check if editor exists
+                                const htmlContent = editQuill.root.innerHTML;
+                                saveEditedNote(noteId, htmlContent);
+                            }
+                        });
+                        
+                        noteElement.querySelector('.note-cancel-btn').addEventListener('click', () => {
+                            // Restore original content view
+                            const contentDiv = document.createElement('div');
+                            contentDiv.className = 'note-content';
+                            contentDiv.innerHTML = originalContent;
+                            editArea.replaceWith(contentDiv);
+                            noteElement.querySelector('.note-actions').style.display = '';
+                        });
+
+                    }, 0); // Timeout 0 defers execution slightly
+                    
                 });
             }
             
