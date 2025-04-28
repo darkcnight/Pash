@@ -266,14 +266,41 @@ function refreshCalendarDisplay() {
 function refreshTasksDisplay() {
     if (!tasksAuthorized) return;
     
+    // Get status indicator
+    const statusIndicator = document.getElementById('tasks-status');
+    
     // If we have cached tasks, refresh their display
     const tasksContent = document.getElementById('tasks-content');
     if (tasksContent && !tasksContent.querySelector('.login-prompt')) {
-        // We have task data, refresh display
+        console.log('Refreshing tasks display');
+        
+        // Make sure currentTaskListId is preserved if we have it
+        const currentId = window.currentTaskListId;
+        
         // Get the tasks from the last response if available
         if (window.lastTasksResponse && window.lastTasksResponse.result) {
-            displayTasks(window.lastTasksResponse.result.items || []);
+            const tasks = window.lastTasksResponse.result.items || [];
+            console.log(`Refreshing display with ${tasks.length} cached tasks`);
+            displayTasks(tasks);
+            
+            // Ensure we don't lose the task list ID during refresh
+            if (currentId && !window.currentTaskListId) {
+                window.currentTaskListId = currentId;
+                console.log('Restored task list ID after refresh:', currentId);
+            }
+            
+            // Make sure the status indicator shows the last updated time
+            if (statusIndicator) {
+                let updatedTime;
+                try {
+                    updatedTime = DateTime.now().setZone(CONFIG.TIMEZONE).toLocaleString(DateTime.TIME_SIMPLE);
+                } catch (error) {
+                    updatedTime = new Date().toLocaleTimeString();
+                }
+                statusIndicator.textContent = `Last updated: ${updatedTime}`;
+            }
         } else {
+            console.log('No cached task data, reloading from API');
             // If no cached data, we'll need to reload
             listTasks();
         }
@@ -387,7 +414,7 @@ const DISCOVERY_DOCS = [
     'https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest'
 ];
 
-const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/tasks.readonly';
+const SCOPES = 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/tasks.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.events.readonly';
 
 let tokenClient;
 let gapiInited = false;
@@ -606,131 +633,48 @@ function maybeEnableButtons() {
 // Set up the settings modal
 function setupSettingsModal() {
     const settingsButton = document.getElementById('settings-button');
-    const modal = document.getElementById('settings-modal');
+    const settingsModal = document.getElementById('settings-modal');
     const modalOverlay = document.getElementById('modal-overlay');
-    const closeModal = document.querySelector('.close-modal');
+    const closeModalBtn = settingsModal.querySelector('.close-modal');
     const saveButton = document.getElementById('settings-save');
     
-    // Input fields
+    // Get all form elements
     const clientIdInput = document.getElementById('google-client-id');
     const apiKeyInput = document.getElementById('google-api-key');
     const weatherApiKeyInput = document.getElementById('weather-api-key');
-    const timezoneSelect = document.getElementById('timezone-select');
-    const calendarDaysSelect = document.getElementById('calendar-days-select');
+    const timezoneInput = document.getElementById('timezone-select');
     const themeToggle = document.getElementById('theme-toggle');
     const dateToggle = document.getElementById('date-toggle');
-    
-    // Help elements
-    const helpButtons = document.querySelectorAll('.help-button');
-    const helpDialog = document.getElementById('help-dialog');
-    const helpDialogClose = document.getElementById('help-dialog-close');
-    const helpDialogContent = document.getElementById('help-dialog-content');
-    
-    // Set up help dialog functionality
-    helpButtons.forEach(button => {
-        button.addEventListener('click', e => {
-            const helpType = e.target.getAttribute('data-help');
-            showHelpDialog(helpType);
-            e.stopPropagation(); // Prevent the event from propagating to parent elements
-        });
-    });
-    
-    // Close help dialog when X is clicked
-    helpDialogClose.addEventListener('click', () => {
-        helpDialog.style.display = 'none';
-    });
-    
-    // Close help dialog when clicking outside
-    modalOverlay.addEventListener('click', () => {
-        helpDialog.style.display = 'none';
-    });
-    
-    // Function to show the appropriate help content
-    function showHelpDialog(helpType) {
-        let content = '';
-        
-        switch (helpType) {
-            case 'google-api-key':
-                content = `
-                    <h3>Google API Key</h3>
-                    <p><strong>Purpose:</strong> Identifies your Google Cloud project and is used for accessing public Google APIs.</p>
-                    <p><a href="https://developers.google.com/maps/documentation/javascript/get-api-key" target="_blank">Official Documentation</a></p>
-                    <p><strong>Steps:</strong></p>
-                    <ul>
-                        <li>Go to the <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console Credentials page</a>.</li>
-                        <li>Click Create Credentials and select API key.</li>
-                        <li>Copy the generated API key.</li>
-                        <li>(Optional but recommended) Click on the API key name to set restrictions for security purposes.</li>
-                    </ul>
-                `;
-                break;
-            case 'oauth-client-id':
-                content = `
-                    <h3>Google OAuth Client ID</h3>
-                    <p><strong>Purpose:</strong> Used for OAuth 2.0 authentication to access user-specific data like Google Calendar and Tasks.</p>
-                    <p><a href="https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid" target="_blank">Official Documentation</a></p>
-                    <p><strong>Steps:</strong></p>
-                    <ul>
-                        <li>Navigate to the <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console Credentials page</a>.</li>
-                        <li>Click Create Credentials and choose OAuth client ID.</li>
-                        <li>If prompted, configure the OAuth consent screen with your app details.</li>
-                        <li>Select Web application as the application type.</li>
-                        <li>Under Authorized JavaScript origins, add your app's URL (e.g., http://localhost:8000).</li>
-                        <li>Click Create and copy the generated Client ID.</li>
-                    </ul>
-                `;
-                break;
-            case 'weather-api-key':
-                content = `
-                    <h3>OpenWeatherMap API Key</h3>
-                    <p><strong>Purpose:</strong> Accesses weather data for displaying current conditions and forecasts.</p>
-                    <p><a href="https://openweathermap.org/faq" target="_blank">Official Documentation</a></p>
-                    <p><strong>Steps:</strong></p>
-                    <ul>
-                        <li>Sign up or log in at <a href="https://openweathermap.org/" target="_blank">OpenWeatherMap</a>.</li>
-                        <li>Navigate to the API keys section of your account.</li>
-                        <li>Click Create key, enter a name for the key, and submit.</li>
-                        <li>Copy the generated API key for use in your application.</li>
-                    </ul>
-                `;
-                break;
-        }
-        
-        helpDialogContent.innerHTML = content;
-        helpDialog.style.display = 'block';
-    }
-    
-    // Populate the timezone dropdown
-    populateTimezones(timezoneSelect);
-    
-    // Set current values
-    clientIdInput.value = CONFIG.CLIENT_ID || '';
-    apiKeyInput.value = CONFIG.API_KEY || '';
-    weatherApiKeyInput.value = CONFIG.WEATHER_API_KEY || '';
-    timezoneSelect.value = CONFIG.TIMEZONE || 'Asia/Singapore';
-    calendarDaysSelect.value = CONFIG.CALENDAR_DAYS || '7';
-    themeToggle.checked = CONFIG.THEME === 'dark';
-    dateToggle.checked = CONFIG.SHOW_DATE === true;
     const weatherToggle = document.getElementById('weather-toggle');
-    weatherToggle.checked = CONFIG.SHOW_WEATHER !== false; // Default to true if not explicitly set to false
+    const calendarDaysSelect = document.getElementById('calendar-days-select');
     
     // Show the modal when settings button is clicked
     settingsButton.addEventListener('click', () => {
-        modal.style.display = 'block';
+        // Populate form fields with current values
+        clientIdInput.value = CONFIG.CLIENT_ID || '';
+        apiKeyInput.value = CONFIG.API_KEY || '';
+        weatherApiKeyInput.value = CONFIG.WEATHER_API_KEY || '';
+        timezoneInput.value = CONFIG.TIMEZONE || '';
+        themeToggle.checked = CONFIG.DARK_MODE === true;
+        dateToggle.checked = CONFIG.SHOW_DATE !== false;
+        weatherToggle.checked = CONFIG.SHOW_WEATHER !== false;
+        calendarDaysSelect.value = CONFIG.CALENDAR_DAYS || '7';
+        
+        // Display the modal
+        settingsModal.style.display = 'block';
         modalOverlay.style.display = 'block';
     });
     
     // Close the modal when X is clicked
-    closeModal.addEventListener('click', () => {
-        modal.style.display = 'none';
+    closeModalBtn.addEventListener('click', () => {
+        settingsModal.style.display = 'none';
         modalOverlay.style.display = 'none';
     });
     
     // Close the modal when clicking outside
     modalOverlay.addEventListener('click', () => {
-        modal.style.display = 'none';
+        settingsModal.style.display = 'none';
         modalOverlay.style.display = 'none';
-        document.getElementById('title-edit-modal').style.display = 'none';
     });
     
     // Toggle theme when theme toggle is clicked
@@ -767,24 +711,32 @@ function setupSettingsModal() {
             CLIENT_ID: clientIdInput.value.trim(),
             API_KEY: apiKeyInput.value.trim(),
             WEATHER_API_KEY: weatherApiKeyInput.value.trim(),
-            TIMEZONE: timezoneSelect.value,
-            CALENDAR_DAYS: parseInt(calendarDaysSelect.value, 10),
-            THEME: themeToggle.checked ? 'dark' : 'light',
+            TIMEZONE: timezoneInput.value.trim(),
+            DARK_MODE: themeToggle.checked,
             SHOW_DATE: dateToggle.checked,
-            SHOW_WEATHER: weatherToggle.checked
+            SHOW_WEATHER: weatherToggle.checked,
+            CALENDAR_DAYS: calendarDaysSelect.value
         };
         
+        // Apply and save the settings
         saveSettings(settings);
         
-        // We don't close the modal automatically anymore, let the user close it explicitly
-        // This allows them to see the highlighted changes and make additional changes if needed
-        
-        // Highlight the save button briefly to indicate success
-        saveButton.classList.add('setting-changed');
-        setTimeout(() => {
-            saveButton.classList.remove('setting-changed');
-        }, 2000);
+        // Close the modal
+        settingsModal.style.display = 'none';
+        modalOverlay.style.display = 'none';
     });
+    
+    // Add sign out button to the modal footer
+    const modalFooter = settingsModal.querySelector('.modal-footer');
+    const signOutButton = document.createElement('button');
+    signOutButton.id = 'sign-out-btn';
+    signOutButton.className = 'sign-out-btn';
+    signOutButton.textContent = 'Sign Out of Google';
+    signOutButton.addEventListener('click', revokeTokens);
+    modalFooter.insertBefore(signOutButton, modalFooter.querySelector('.github-link'));
+    
+    // Set up the timezones datalist
+    populateTimezones(timezoneInput);
 }
 
 // Populate timezone dropdown
@@ -1852,16 +1804,38 @@ function listTasks() {
     // Show loading state
     statusIndicator.innerHTML = 'Loading tasks... <div class="loader"></div>';
     
+    // Check if we are properly authenticated
+    if (!gapi.client.getToken()) {
+        console.error("No authentication token available");
+        statusIndicator.textContent = 'Authentication required';
+        showToast("Please sign in to view tasks", "error");
+        return;
+    }
+    
     try {
-        // Get the default task list - Fix the API call
+        // Get the default task list
         gapi.client.tasks.tasklists.list({
-            'maxResults': 1
+            'maxResults': 10
         }).then(response => {
             if (!response.result.items || response.result.items.length === 0) {
-                throw new Error('No task lists found');
+                console.log('No task lists found, creating a default task list');
+                return gapi.client.tasks.tasklists.insert({
+                    resource: {
+                        title: 'My Tasks'
+                    }
+                }).then(newListResponse => {
+                    console.log('Created new task list:', newListResponse.result);
+                    return { result: { items: [newListResponse.result] } };
+                });
             }
-            
+            return response;
+        }).then(response => {
             const taskList = response.result.items[0];
+            console.log('Using task list:', taskList.id, taskList.title);
+            
+            // Store task list ID globally for later use
+            window.currentTaskListId = taskList.id;
+            
             return gapi.client.tasks.tasks.list({
                 'tasklist': taskList.id
             });
@@ -1870,6 +1844,8 @@ function listTasks() {
             window.lastTasksResponse = response;
             
             const tasks = response.result.items || [];
+            console.log(`Retrieved ${tasks.length} tasks from list`);
+            
             displayTasks(tasks);
             
             let updatedTime;
@@ -1882,13 +1858,17 @@ function listTasks() {
             statusIndicator.textContent = `Last updated: ${updatedTime}`;
         }).catch(error => {
             console.error('Error fetching tasks:', error);
+            console.log('Error details:', JSON.stringify(error, null, 2));
             statusIndicator.textContent = 'Error loading tasks. Try refreshing.';
             
             if (error.status === 401) {
                 // Token expired, try to refresh
                 handleTasksAuthClick();
+                showToast('Authentication expired. Reconnecting...', 'warning');
             } else {
-                showError('tasks-section', 'Tasks Error', 'Failed to load tasks. Please try again later.');
+                const errorMessage = error.result?.error?.message || 'Failed to load tasks. Please try again later.';
+                showError('tasks-section', 'Tasks Error', errorMessage);
+                showToast('Failed to load tasks. Check console for details.', 'error');
             }
         });
     } catch (error) {
@@ -1900,9 +1880,21 @@ function listTasks() {
 // Display tasks
 function displayTasks(tasks) {
     const tasksContent = document.getElementById('tasks-content');
+    const statusIndicator = document.getElementById('tasks-status');
     
     if (!tasks || tasks.length === 0) {
         tasksContent.innerHTML = '<div style="text-align: center; padding: 20px;">No tasks found.</div>';
+        // Add task input even if no tasks
+        addTaskInputElement(tasksContent);
+        
+        // Make sure status indicator is visible
+        let updatedTime;
+        try {
+            updatedTime = DateTime.now().setZone(CONFIG.TIMEZONE).toLocaleString(DateTime.TIME_SIMPLE);
+        } catch (error) {
+            updatedTime = new Date().toLocaleTimeString();
+        }
+        statusIndicator.textContent = `Last updated: ${updatedTime}`;
         return;
     }
     
@@ -1926,6 +1918,9 @@ function displayTasks(tasks) {
             return new Date(a.due) - new Date(b.due);
         });
         
+        // Filter out completed tasks (they should not be displayed)
+        const displayTasks = tasks.filter(task => task.status !== 'completed');
+        
         // Setup timezone for due dates
         let today, tomorrow;
         try {
@@ -1937,10 +1932,23 @@ function displayTasks(tasks) {
             tomorrow = today.plus({ days: 1 });
         }
         
+        // Make sure we have a task list ID
+        if (!window.currentTaskListId && window.lastTasksResponse?.result?.items) {
+            const firstTask = window.lastTasksResponse.result.items[0];
+            if (firstTask?.selfLink) {
+                // Extract task list ID from the selfLink URL
+                const match = firstTask.selfLink.match(/lists\/([^\/]+)\/tasks/);
+                if (match && match[1]) {
+                    window.currentTaskListId = match[1];
+                    console.log('Recovered task list ID from task self link:', window.currentTaskListId);
+                }
+            }
+        }
+        
         // Build HTML
         let html = '';
         
-        tasks.forEach(task => {
+        displayTasks.forEach(task => {
             // Skip hidden tasks
             if (hiddenItems.task.includes(task.id)) {
                 return;
@@ -1976,12 +1984,14 @@ function displayTasks(tasks) {
             const tabStyle = tabColor ? `style="border-left-color: ${tabColor};"` : '';
             
             html += `
-                <div class="task-item ${isCompleted ? 'completed' : ''}" data-id="${task.id}" data-type="task" ${tabStyle}>
-                    <input type="checkbox" class="task-checkbox" ${isCompleted ? 'checked' : ''} disabled>
+                <div class="task-item ${isCompleted ? 'completed' : ''}" data-id="${task.id}" data-type="task" data-title="${escapeHtml(task.title)}" ${tabStyle}>
+                    <input type="checkbox" class="task-checkbox" ${isCompleted ? 'checked' : ''}>
                     <div class="task-text">
                         <div class="task-title">${task.title || 'Untitled Task'}</div>
                         ${dueStr ? `<div class="task-due">${dueStr}</div>` : ''}
                     </div>
+                    <button class="undo-btn" style="display: none;"><i class="fas fa-undo"></i></button>
+                    <button class="delete-task-btn" title="Delete this task"><i class="fas fa-times"></i></button>
                     <button class="hide-item-btn" title="Hide this task"><i class="fas fa-eye-slash"></i></button>
                 </div>
             `;
@@ -1989,172 +1999,395 @@ function displayTasks(tasks) {
         
         tasksContent.innerHTML = html;
         
+        // Add task input field
+        addTaskInputElement(tasksContent);
+        
         // Add event listeners to hide buttons
         addHideButtonListeners();
         
         // Add event listeners to tab colors
         addTabColorListeners();
+        
+        // Add event listeners for task checkboxes and delete buttons
+        addTaskActionListeners();
     } catch (error) {
         console.error('Error displaying tasks:', error);
         showError('tasks-section', 'Tasks Display Error', 'Failed to display tasks due to an error.');
     }
 }
 
-// Function to toggle weather display and adjust header layout
-function toggleWeatherDisplay(show) {
-    const weatherContainer = document.getElementById('weather');
-    const dashboardTitle = document.querySelector('.dashboard-title-container');
+// Helper function to escape HTML special characters
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Add task input field to tasks section
+function addTaskInputElement(tasksContent) {
+    const taskInputContainer = document.createElement('div');
+    taskInputContainer.className = 'task-input-container';
     
-    if (show) {
-        weatherContainer.style.display = 'flex';
-        dashboardTitle.classList.remove('title-left');
-    } else {
-        weatherContainer.style.display = 'none';
-        dashboardTitle.classList.add('title-left');
+    taskInputContainer.innerHTML = `
+        <input type="text" id="new-task-input" placeholder="Add a task...">
+        <button id="add-task-btn" title="Add task"><i class="fas fa-plus"></i></button>
+    `;
+    
+    // Append at the end but make it sticky with CSS
+    tasksContent.appendChild(taskInputContainer);
+    
+    // Add event listener to input field
+    const taskInput = document.getElementById('new-task-input');
+    const addTaskBtn = document.getElementById('add-task-btn');
+    
+    taskInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            addNewTask();
+        }
+    });
+    
+    addTaskBtn.addEventListener('click', addNewTask);
+}
+
+// Add new task to Google Tasks
+function addNewTask() {
+    const taskInput = document.getElementById('new-task-input');
+    const taskTitle = taskInput.value.trim();
+    
+    if (!taskTitle) return;
+    
+    // Get the task list ID
+    const taskListId = window.currentTaskListId;
+    if (!taskListId) {
+        console.error('No task list ID available for adding new task');
+        showToast('Error: Task list not found. Please reload the page.', 'error');
+        
+        // Try to get task list ID again
+        listTasks();
+        return;
+    }
+    
+    // Show loading state
+    taskInput.disabled = true;
+    const addTaskBtn = document.getElementById('add-task-btn');
+    addTaskBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    
+    console.log(`Adding new task "${taskTitle}" to list ${taskListId}`);
+    
+    // Check if we are properly authenticated
+    if (!gapi.client.getToken()) {
+        console.error("No authentication token available");
+        taskInput.disabled = false;
+        addTaskBtn.innerHTML = '<i class="fas fa-plus"></i>';
+        showToast("Please sign in to add tasks", "error");
+        handleTasksAuthClick();
+        return;
+    }
+    
+    // Create the task with detailed error logging
+    try {
+        gapi.client.tasks.tasks.insert({
+            tasklist: taskListId,
+            resource: {
+                title: taskTitle,
+                status: 'needsAction'
+            }
+        }).then(response => {
+            console.log('Task added successfully:', response.result);
+            
+            // Clear input field
+            taskInput.value = '';
+            taskInput.disabled = false;
+            addTaskBtn.innerHTML = '<i class="fas fa-plus"></i>';
+            
+            // Refresh tasks list
+            listTasks();
+            
+            // Show success message
+            showToast('Task added successfully', 'success');
+        }).catch(error => {
+            console.error('Error adding task:', error);
+            console.log('Error details:', JSON.stringify(error, null, 2));
+            
+            // Reset UI
+            taskInput.disabled = false;
+            addTaskBtn.innerHTML = '<i class="fas fa-plus"></i>';
+            
+            // Check if token expired
+            if (error.status === 401) {
+                showToast('Authentication expired. Reconnecting...', 'warning');
+                // Try to refresh token
+                handleTasksAuthClick();
+            } else {
+                // Show error message with details
+                const errorMessage = error.result?.error?.message || 'Error adding task. Please try again.';
+                showToast(errorMessage, 'error');
+            }
+        });
+    } catch (error) {
+        console.error('Exception in addNewTask:', error);
+        taskInput.disabled = false;
+        addTaskBtn.innerHTML = '<i class="fas fa-plus"></i>';
+        showToast('Error adding task: ' + error.message, 'error');
     }
 }
 
-// Add event listeners to hide buttons for both calendar events and tasks
-function addHideButtonListeners() {
-    document.querySelectorAll('.hide-item-btn').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation(); // Prevent event bubbling
-            const item = this.closest('.event-item, .task-item');
-            if (item) {
-                item.style.display = 'none';
-                
-                // Store the hidden state in localStorage
-                const itemId = item.dataset.id;
-                const itemType = item.classList.contains('event-item') ? 'event' : 'task';
-                
-                if (itemId) {
-                    // Get current hidden items
-                    const hiddenItems = getHiddenItems();
-                    
-                    // Add this item to the hidden items list if not already there
-                    if (!hiddenItems[itemType].includes(itemId)) {
-                        hiddenItems[itemType].push(itemId);
-                        saveHiddenItems(hiddenItems);
-                    }
-                }
+// Add event listeners for task checkboxes and delete buttons
+function addTaskActionListeners() {
+    // Add event listeners for checkboxes
+    document.querySelectorAll('.task-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function(e) {
+            e.stopPropagation();
+            const taskItem = this.closest('.task-item');
+            if (!taskItem) return; // Safety check if element not found
+            
+            const taskId = taskItem.dataset.id;
+            const isCompleted = this.checked;
+            
+            // Update UI immediately
+            if (isCompleted) {
+                taskItem.classList.add('pending-completion');
+                const titleEl = taskItem.querySelector('.task-title');
+                if (titleEl) titleEl.style.textDecoration = 'line-through';
+            } else {
+                taskItem.classList.remove('pending-completion');
+                const titleEl = taskItem.querySelector('.task-title'); 
+                if (titleEl) titleEl.style.textDecoration = 'none';
             }
+            
+            // Show undo button
+            const undoBtn = taskItem.querySelector('.undo-btn');
+            if (undoBtn) undoBtn.style.display = 'block';
+            
+            // Hide delete button when undo is shown
+            const deleteBtn = taskItem.querySelector('.delete-task-btn');
+            if (deleteBtn) deleteBtn.style.display = 'none';
+            
+            // Clear existing timer if any
+            if (taskItem.dataset.timerId) {
+                clearTimeout(parseInt(taskItem.dataset.timerId));
+            }
+            
+            // Set timer for API update
+            const timerId = setTimeout(() => {
+                if (!document.body.contains(taskItem)) return; // Check if element still exists
+                
+                updateTaskStatus(taskId, isCompleted);
+                
+                // Remove task from view if completed - do it immediately now
+                if (isCompleted) {
+                    taskItem.remove();
+                }
+            }, 10000); // 10 second delay
+            
+            // Store timer ID in the task item
+            taskItem.dataset.timerId = timerId;
+            
+            // Show toast message
+            const actionText = isCompleted ? 'completed' : 'uncompleted';
+            showToast(`Task will be marked as ${actionText} in 10 seconds. Click undo to cancel.`, 'info', 10000);
+        });
+    });
+    
+    // Add event listeners for delete buttons
+    document.querySelectorAll('.delete-task-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const taskItem = this.closest('.task-item');
+            if (!taskItem) return; // Safety check if element not found
+            
+            const taskId = taskItem.dataset.id;
+            const taskTitle = taskItem.dataset.title || 'this task';
+            
+            // Update UI immediately
+            taskItem.classList.add('pending-deletion');
+            
+            // Show undo button
+            const undoBtn = taskItem.querySelector('.undo-btn');
+            if (undoBtn) undoBtn.style.display = 'block';
+            
+            // Hide delete button when undo is shown
+            this.style.display = 'none';
+            
+            // Clear existing timer if any
+            if (taskItem.dataset.timerId) {
+                clearTimeout(parseInt(taskItem.dataset.timerId));
+            }
+            
+            // Set timer for API update
+            const timerId = setTimeout(() => {
+                if (!document.body.contains(taskItem)) return; // Check if element still exists
+                
+                deleteTask(taskId);
+                // Remove task from view
+                taskItem.style.height = '0';
+                taskItem.style.opacity = '0';
+                taskItem.style.margin = '0';
+                taskItem.style.padding = '0';
+                taskItem.style.overflow = 'hidden';
+                
+                setTimeout(() => {
+                    if (document.body.contains(taskItem)) {
+                        taskItem.remove();
+                    }
+                }, 300);
+            }, 10000); // 10 second delay
+            
+            // Store timer ID in the task item
+            taskItem.dataset.timerId = timerId;
+            
+            // Show toast message
+            showToast(`"${taskTitle}" will be deleted in 10 seconds. Click undo to cancel.`, 'info', 10000);
+        });
+    });
+    
+    // Add event listeners for undo buttons
+    document.querySelectorAll('.undo-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const taskItem = this.closest('.task-item');
+            if (!taskItem) return; // Safety check if element not found
+            
+            const taskId = taskItem.dataset.id;
+            const timerId = taskItem.dataset.timerId;
+            
+            // Clear the timeout
+            if (timerId) {
+                clearTimeout(parseInt(timerId));
+                taskItem.removeAttribute('data-timer-id');
+            }
+            
+            // Reset UI
+            taskItem.classList.remove('pending-completion', 'pending-deletion');
+            const checkbox = taskItem.querySelector('.task-checkbox');
+            const titleEl = taskItem.querySelector('.task-title');
+            
+            if (taskItem.classList.contains('completed') && checkbox && titleEl) {
+                checkbox.checked = true;
+                titleEl.style.textDecoration = 'line-through';
+            } else if (checkbox && titleEl) {
+                checkbox.checked = false;
+                titleEl.style.textDecoration = 'none';
+            }
+            
+            // Hide undo button and show delete button again
+            this.style.display = 'none';
+            const deleteBtn = taskItem.querySelector('.delete-task-btn');
+            if (deleteBtn) deleteBtn.style.display = '';
+            
+            // Show toast message
+            showToast('Action cancelled', 'success');
         });
     });
 }
 
-// Get hidden items from localStorage
-function getHiddenItems() {
-    const hiddenItemsStr = localStorage.getItem('dashboard_hidden_items');
-    const defaultHiddenItems = { event: [], task: [] };
-    
-    if (!hiddenItemsStr) {
-        return defaultHiddenItems;
+// Update task status in Google Tasks API
+function updateTaskStatus(taskId, isCompleted) {
+    const taskListId = window.currentTaskListId;
+    if (!taskListId) {
+        console.error('Task list ID not found');
+        showToast('Error: Task list not found. Please reload the page.', 'error');
+        return;
     }
+    
+    console.log(`Updating task ${taskId} in list ${taskListId} to ${isCompleted ? 'completed' : 'needsAction'}`);
     
     try {
-        return JSON.parse(hiddenItemsStr);
+        // First get the current task to preserve other fields
+        gapi.client.tasks.tasks.get({
+            tasklist: taskListId,
+            task: taskId
+        }).then(response => {
+            const task = response.result;
+            
+            // Update status
+            task.status = isCompleted ? 'completed' : 'needsAction';
+            
+            // If marking as not completed, also clear completed date
+            if (!isCompleted) {
+                task.completed = null;
+            }
+            
+            // Update the task
+            return gapi.client.tasks.tasks.update({
+                tasklist: taskListId,
+                task: taskId,
+                resource: task
+            });
+        }).then(response => {
+            console.log('Task status updated successfully', response);
+            showToast('Task updated successfully', 'success');
+        }).catch(error => {
+            console.error('Error updating task status:', error);
+            
+            // Check if token expired
+            if (error.status === 401) {
+                showToast('Authentication expired. Reconnecting...', 'warning');
+                // Try to refresh token
+                handleTasksAuthClick();
+            } else {
+                showToast('Error updating task. Please try again.', 'error');
+                
+                // Refresh the task list to ensure UI is in sync with server
+                setTimeout(() => {
+                    listTasks();
+                }, 1000);
+            }
+        });
     } catch (error) {
-        console.error('Error parsing hidden items:', error);
-        return defaultHiddenItems;
-    }
-}
-
-// Save hidden items to localStorage
-function saveHiddenItems(hiddenItems) {
-    localStorage.setItem('dashboard_hidden_items', JSON.stringify(hiddenItems));
-}
-
-// Clear all hidden items
-function clearHiddenItems() {
-    saveHiddenItems({ event: [], task: [] });
-    // Refresh the displayed items
-    if (calendarAuthorized) {
-        listCalendarEvents();
-    }
-    if (tasksAuthorized) {
-        listTasks();
-    }
-}
-
-// Clear hidden items of a specific type
-function clearHiddenItemsByType(type) {
-    const hiddenItems = getHiddenItems();
-    hiddenItems[type] = [];
-    saveHiddenItems(hiddenItems);
-    
-    // Refresh the appropriate section
-    if (type === 'event' && calendarAuthorized) {
-        listCalendarEvents();
-    } else if (type === 'task' && tasksAuthorized) {
-        listTasks();
-    }
-}
-
-// Set up calendar window dropdown functionality
-function setupCalendarWindowDropdown() {
-    const calendarWindowBtn = document.getElementById('calendar-window-btn');
-    const calendarWindowDropdown = document.getElementById('calendar-window-dropdown');
-    const calendarWindowSelect = document.getElementById('calendar-window-select');
-    const settingsCalendarWindowSelect = document.getElementById('calendar-days-select');
-    
-    // Hide dropdown initially
-    calendarWindowDropdown.style.display = 'none';
-    
-    // Set initial value from CONFIG
-    calendarWindowSelect.value = CONFIG.CALENDAR_DAYS || '7';
-    
-    // Toggle dropdown visibility when button is clicked
-    calendarWindowBtn.addEventListener('click', () => {
-        if (calendarWindowDropdown.style.display === 'none') {
-            calendarWindowDropdown.style.display = 'block';
-        } else {
-            calendarWindowDropdown.style.display = 'none';
-        }
-    });
-    
-    // Handle value change
-    calendarWindowSelect.addEventListener('change', () => {
-        const newValue = parseInt(calendarWindowSelect.value, 10);
+        console.error('Unexpected error updating task status:', error);
+        showToast('An unexpected error occurred. Please try again.', 'error');
         
-        // Save to CONFIG and update settings modal dropdown
-        CONFIG.CALENDAR_DAYS = newValue;
-        if (settingsCalendarWindowSelect) {
-            settingsCalendarWindowSelect.value = newValue.toString();
-        }
-        
-        // Save the settings and reload calendar events
-        saveSettings({ CALENDAR_DAYS: newValue });
-        
-        // Close the dropdown
-        calendarWindowDropdown.style.display = 'none';
-    });
-    
-    // Close the dropdown when clicking outside
-    document.addEventListener('click', (event) => {
-        if (!calendarWindowBtn.contains(event.target) && 
-            !calendarWindowDropdown.contains(event.target)) {
-            calendarWindowDropdown.style.display = 'none';
-        }
-    });
-    
-    // Update synchronization in the setupSettingsModal function
-    // This will be handled by modifying the saveSettings function to update both dropdowns
+        // Refresh the task list to ensure UI is in sync with server
+        setTimeout(() => {
+            listTasks();
+        }, 1000);
+    }
 }
 
-// Get item colors from localStorage
-function getItemColors() {
-    const itemColorsStr = localStorage.getItem('dashboard_item_colors');
-    const defaultItemColors = { event: {}, task: {}, note: {} };
-    
-    if (!itemColorsStr) {
-        return defaultItemColors;
+// Delete task from Google Tasks API
+function deleteTask(taskId) {
+    const taskListId = window.currentTaskListId;
+    if (!taskListId) {
+        console.error('Task list ID not found');
+        showToast('Error: Task list not found. Please reload the page.', 'error');
+        return;
     }
+    
+    console.log(`Deleting task ${taskId} from list ${taskListId}`);
     
     try {
-        return JSON.parse(itemColorsStr);
+        gapi.client.tasks.tasks.delete({
+            tasklist: taskListId,
+            task: taskId
+        }).then(response => {
+            console.log('Task deleted successfully', response);
+            showToast('Task deleted successfully', 'success');
+        }).catch(error => {
+            console.error('Error deleting task:', error);
+            
+            // Check if token expired
+            if (error.status === 401) {
+                showToast('Authentication expired. Reconnecting...', 'warning');
+                // Try to refresh token
+                handleTasksAuthClick();
+            } else {
+                showToast('Error deleting task. Please try again.', 'error');
+                
+                // Refresh the task list to ensure UI is in sync with server
+                setTimeout(() => {
+                    listTasks();
+                }, 1000);
+            }
+        });
     } catch (error) {
-        console.error('Error parsing item colors:', error);
-        return defaultItemColors;
+        console.error('Unexpected error deleting task:', error);
+        showToast('An unexpected error occurred. Please try again.', 'error');
+        
+        // Refresh the task list to ensure UI is in sync with server
+        setTimeout(() => {
+            listTasks();
+        }, 1000);
     }
 }
 
@@ -2561,4 +2794,212 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     }, 1000);
-}); 
+});
+
+// Function to toggle weather display and adjust header layout
+function toggleWeatherDisplay(show) {
+    const weatherContainer = document.getElementById('weather');
+    const dashboardTitle = document.querySelector('.dashboard-title-container');
+    
+    if (show) {
+        weatherContainer.style.display = 'flex';
+        dashboardTitle.classList.remove('title-left');
+    } else {
+        weatherContainer.style.display = 'none';
+        dashboardTitle.classList.add('title-left');
+    }
+}
+
+// Add event listeners to hide buttons for both calendar events and tasks
+function addHideButtonListeners() {
+    document.querySelectorAll('.hide-item-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation(); // Prevent event bubbling
+            const item = this.closest('.event-item, .task-item');
+            if (item) {
+                item.style.display = 'none';
+                
+                // Store the hidden state in localStorage
+                const itemId = item.dataset.id;
+                const itemType = item.dataset.type || (item.classList.contains('event-item') ? 'event' : 'task');
+                
+                if (itemId) {
+                    // Get current hidden items
+                    const hiddenItems = getHiddenItems();
+                    
+                    // Add this item to the hidden items list if not already there
+                    if (!hiddenItems[itemType].includes(itemId)) {
+                        hiddenItems[itemType].push(itemId);
+                        saveHiddenItems(hiddenItems);
+                    }
+                }
+            }
+        });
+    });
+}
+
+// Get hidden items from localStorage
+function getHiddenItems() {
+    const hiddenItemsStr = localStorage.getItem('dashboard_hidden_items');
+    const defaultHiddenItems = { event: [], task: [] };
+    
+    if (!hiddenItemsStr) {
+        return defaultHiddenItems;
+    }
+    
+    try {
+        return JSON.parse(hiddenItemsStr);
+    } catch (error) {
+        console.error('Error parsing hidden items:', error);
+        return defaultHiddenItems;
+    }
+}
+
+// Save hidden items to localStorage
+function saveHiddenItems(hiddenItems) {
+    localStorage.setItem('dashboard_hidden_items', JSON.stringify(hiddenItems));
+}
+
+// Clear all hidden items
+function clearHiddenItems() {
+    saveHiddenItems({ event: [], task: [] });
+    // Refresh the displayed items
+    if (calendarAuthorized) {
+        listCalendarEvents();
+    }
+    if (tasksAuthorized) {
+        listTasks();
+    }
+}
+
+// Clear hidden items of a specific type
+function clearHiddenItemsByType(type) {
+    const hiddenItems = getHiddenItems();
+    hiddenItems[type] = [];
+    saveHiddenItems(hiddenItems);
+    
+    // Refresh the appropriate section
+    if (type === 'event' && calendarAuthorized) {
+        listCalendarEvents();
+    } else if (type === 'task' && tasksAuthorized) {
+        listTasks();
+    }
+}
+
+// Set up calendar window dropdown functionality
+function setupCalendarWindowDropdown() {
+    const calendarWindowBtn = document.getElementById('calendar-window-btn');
+    const calendarWindowDropdown = document.getElementById('calendar-window-dropdown');
+    const calendarWindowSelect = document.getElementById('calendar-window-select');
+    const settingsCalendarWindowSelect = document.getElementById('calendar-days-select');
+    
+    // Hide dropdown initially
+    calendarWindowDropdown.style.display = 'none';
+    
+    // Set initial value from CONFIG
+    calendarWindowSelect.value = CONFIG.CALENDAR_DAYS || '7';
+    
+    // Toggle dropdown visibility when button is clicked
+    calendarWindowBtn.addEventListener('click', () => {
+        if (calendarWindowDropdown.style.display === 'none') {
+            calendarWindowDropdown.style.display = 'block';
+        } else {
+            calendarWindowDropdown.style.display = 'none';
+        }
+    });
+    
+    // Handle value change
+    calendarWindowSelect.addEventListener('change', () => {
+        const newValue = parseInt(calendarWindowSelect.value, 10);
+        
+        // Save to CONFIG and update settings modal dropdown
+        CONFIG.CALENDAR_DAYS = newValue;
+        if (settingsCalendarWindowSelect) {
+            settingsCalendarWindowSelect.value = newValue.toString();
+        }
+        
+        // Save the settings and reload calendar events
+        saveSettings({ CALENDAR_DAYS: newValue });
+        
+        // Close the dropdown
+        calendarWindowDropdown.style.display = 'none';
+    });
+    
+    // Close the dropdown when clicking outside
+    document.addEventListener('click', (event) => {
+        if (!calendarWindowBtn.contains(event.target) && 
+            !calendarWindowDropdown.contains(event.target)) {
+            calendarWindowDropdown.style.display = 'none';
+        }
+    });
+    
+    // Update synchronization in the setupSettingsModal function
+    // This will be handled by modifying the saveSettings function to update both dropdowns
+}
+
+// Get item colors from localStorage
+function getItemColors() {
+    const itemColorsStr = localStorage.getItem('dashboard_item_colors');
+    const defaultItemColors = { event: {}, task: {}, note: {} };
+    
+    if (!itemColorsStr) {
+        return defaultItemColors;
+    }
+    
+    try {
+        return JSON.parse(itemColorsStr);
+    } catch (error) {
+        console.error('Error parsing item colors:', error);
+        return defaultItemColors;
+    }
+}
+
+// Function to revoke tokens and clear auth state
+function revokeTokens() {
+    try {
+        // Clear token from local storage
+        localStorage.removeItem('gapi_token');
+        
+        // Reset auth state
+        calendarAuthorized = false;
+        tasksAuthorized = false;
+        
+        // Clear the token client side
+        if (gapi.client.getToken()) {
+            google.accounts.oauth2.revoke(gapi.client.getToken().access_token, () => {
+                console.log('Token revoked');
+                gapi.client.setToken('');
+                showToast('Authentication tokens revoked', 'info');
+                
+                // Reset UI state
+                document.getElementById('calendar-login-prompt').style.display = 'block';
+                document.getElementById('tasks-login-prompt').style.display = 'block';
+                document.getElementById('calendar-content').innerHTML = '';
+                document.getElementById('tasks-content').innerHTML = '';
+                
+                // Add login buttons back
+                const calendarLoginPrompt = document.getElementById('calendar-login-prompt');
+                const tasksLoginPrompt = document.getElementById('tasks-login-prompt');
+                
+                calendarLoginPrompt.innerHTML = `
+                    <p>Sign in to view your Google Calendar events</p>
+                    <button class="login-button" id="authorize-calendar">Sign In</button>
+                `;
+                
+                tasksLoginPrompt.innerHTML = `
+                    <p>Sign in to view your Google Tasks</p>
+                    <button class="login-button" id="authorize-tasks">Sign In</button>
+                `;
+                
+                // Re-attach event handlers
+                document.getElementById('authorize-calendar').onclick = handleCalendarAuthClick;
+                document.getElementById('authorize-tasks').onclick = handleTasksAuthClick;
+            });
+        } else {
+            showToast('No active token found', 'info');
+        }
+    } catch (error) {
+        console.error('Error revoking token:', error);
+        showToast('Error revoking tokens', 'error');
+    }
+} 
