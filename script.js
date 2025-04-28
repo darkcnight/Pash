@@ -1090,6 +1090,19 @@ function setupNotes() {
         const notes = getNotes();
         notesList.innerHTML = '';
         
+        // Get saved colors with proper error handling
+        let itemColors = { event: {}, task: {}, note: {} };
+        try {
+            const colors = getItemColors();
+            if (colors && typeof colors === 'object') {
+                itemColors = colors;
+                // Ensure note property exists
+                if (!itemColors.note) itemColors.note = {};
+            }
+        } catch (e) {
+            console.error('Error getting item colors:', e);
+        }
+        
         if (notes.length === 0) {
             notesList.innerHTML = '<div class="note-item" style="opacity: 0.7; text-align: center;">No notes yet. Type something to get started!</div>';
             return;
@@ -1100,6 +1113,21 @@ function setupNotes() {
             const noteElement = document.createElement('div');
             noteElement.className = 'note-item';
             noteElement.dataset.id = note.id;
+            noteElement.dataset.type = 'note';
+            
+            // Apply saved color if exists - with extra safeguards
+            let tabColor = '';
+            if (note && note.id && itemColors && itemColors.note) {
+                try {
+                    tabColor = itemColors.note[note.id] || '';
+                } catch(e) {
+                    console.error('Error accessing note color:', e);
+                }
+            }
+            
+            if (tabColor) {
+                noteElement.style.borderLeftColor = tabColor;
+            }
             
             // Format the date in the user's timezone
             let formattedDate;
@@ -1266,7 +1294,74 @@ function setupNotes() {
                 }, 300);
             });
         });
+        
+        // Add direct note color functionality
+        setupNoteColorListeners();
     }
+    
+    // Function to setup color listeners specifically for notes
+    function setupNoteColorListeners() {
+        console.log("Setting up note color listeners");
+        const notes = document.querySelectorAll('.note-item');
+        console.log(`Found ${notes.length} notes to setup color listeners for`);
+        
+        notes.forEach(note => {
+            // Remove any existing listeners first to avoid duplicates
+            const clonedNote = note.cloneNode(true);
+            note.parentNode.replaceChild(clonedNote, note);
+            
+            // Add new event listener
+            clonedNote.addEventListener('click', function(e) {
+                const rect = this.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                
+                // If click is within first 15px (the tab area)
+                if (clickX <= 15) {
+                    const itemId = this.dataset.id;
+                    if (itemId) {
+                        console.log(`Note tab clicked: ${itemId}`);
+                        // Show color picker
+                        showColorPicker(itemId, 'note', this);
+                        e.stopPropagation(); // Prevent event bubbling
+                    }
+                }
+            });
+            
+            // Re-add any other listeners like edit and delete buttons
+            const editBtn = clonedNote.querySelector('.edit-note');
+            if (editBtn) {
+                editBtn.addEventListener('click', function(e) {
+                    const noteElement = e.target.closest('.note-item');
+                    const noteId = parseInt(noteElement.dataset.id);
+                    const note = getNotes().find(n => n.id === noteId);
+                    
+                    if (!note) return;
+                    
+                    // Note editing logic would be here - this is handled elsewhere
+                    e.stopPropagation();
+                });
+            }
+            
+            const deleteBtn = clonedNote.querySelector('.delete-note');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', function(e) {
+                    const noteElement = e.target.closest('.note-item');
+                    const noteId = parseInt(noteElement.dataset.id);
+                    
+                    // Note deletion logic would be here - this is handled elsewhere
+                    e.stopPropagation();
+                });
+            }
+        });
+    }
+    
+    // This function should be called whenever the DOM content is loaded or notes are refreshed
+    document.addEventListener('DOMContentLoaded', function() {
+        // Wait for notes to be loaded
+        setTimeout(function() {
+            setupNoteColorListeners();
+        }, 500);
+    });
     
     // Function to save edited note
     function saveEditedNote(noteId, newContent) {
@@ -1627,6 +1722,9 @@ function displayCalendarEvents(events) {
         // Get hidden items
         const hiddenItems = getHiddenItems();
         
+        // Get saved item colors
+        const itemColors = getItemColors();
+        
         // Group events by day
         const eventsByDay = {};
         let today, tomorrow;
@@ -1700,8 +1798,12 @@ function displayCalendarEvents(events) {
                     timeStr = 'All day';
                 }
                 
+                // Get the saved color for this event or use default
+                const tabColor = itemColors.event[event.id] || '';
+                const tabStyle = tabColor ? `style="border-left-color: ${tabColor};"` : '';
+                
                 html += `
-                    <div class="event-item" data-id="${event.id}">
+                    <div class="event-item" data-id="${event.id}" data-type="event" ${tabStyle}>
                         <div class="event-title">${event.summary || 'Untitled Event'}</div>
                         <div class="event-time">${timeStr}</div>
                         ${event.location ? `<div class="event-location">📍 ${event.location}</div>` : ''}
@@ -1715,6 +1817,9 @@ function displayCalendarEvents(events) {
         
         // Add event listeners to hide buttons
         addHideButtonListeners();
+        
+        // Add event listeners to tab colors
+        addTabColorListeners();
     } catch (error) {
         console.error('Error displaying calendar events:', error);
         showError('calendar-section', 'Calendar Display Error', 'Failed to display calendar events due to an error.');
@@ -1805,6 +1910,9 @@ function displayTasks(tasks) {
         // Get hidden items
         const hiddenItems = getHiddenItems();
         
+        // Get saved item colors
+        const itemColors = getItemColors();
+        
         // Sort tasks: incomplete first, then by due date
         tasks.sort((a, b) => {
             if ((a.status === 'completed') !== (b.status === 'completed')) {
@@ -1863,8 +1971,12 @@ function displayTasks(tasks) {
                 }
             }
             
+            // Get the saved color for this task or use default
+            const tabColor = itemColors.task[task.id] || '';
+            const tabStyle = tabColor ? `style="border-left-color: ${tabColor};"` : '';
+            
             html += `
-                <div class="task-item ${isCompleted ? 'completed' : ''}" data-id="${task.id}">
+                <div class="task-item ${isCompleted ? 'completed' : ''}" data-id="${task.id}" data-type="task" ${tabStyle}>
                     <input type="checkbox" class="task-checkbox" ${isCompleted ? 'checked' : ''} disabled>
                     <div class="task-text">
                         <div class="task-title">${task.title || 'Untitled Task'}</div>
@@ -1879,6 +1991,9 @@ function displayTasks(tasks) {
         
         // Add event listeners to hide buttons
         addHideButtonListeners();
+        
+        // Add event listeners to tab colors
+        addTabColorListeners();
     } catch (error) {
         console.error('Error displaying tasks:', error);
         showError('tasks-section', 'Tasks Display Error', 'Failed to display tasks due to an error.');
@@ -2024,4 +2139,426 @@ function setupCalendarWindowDropdown() {
     
     // Update synchronization in the setupSettingsModal function
     // This will be handled by modifying the saveSettings function to update both dropdowns
-} 
+}
+
+// Get item colors from localStorage
+function getItemColors() {
+    const itemColorsStr = localStorage.getItem('dashboard_item_colors');
+    const defaultItemColors = { event: {}, task: {}, note: {} };
+    
+    if (!itemColorsStr) {
+        return defaultItemColors;
+    }
+    
+    try {
+        return JSON.parse(itemColorsStr);
+    } catch (error) {
+        console.error('Error parsing item colors:', error);
+        return defaultItemColors;
+    }
+}
+
+// Save item colors to localStorage
+function saveItemColors(itemColors) {
+    localStorage.setItem('dashboard_item_colors', JSON.stringify(itemColors));
+}
+
+// Add event listeners to tab color elements
+function addTabColorListeners() {
+    // Events and tasks (they now have the data-type attribute directly on the item)
+    document.querySelectorAll('.event-item, .task-item').forEach(item => {
+        item.addEventListener('click', function(e) {
+            // Only trigger color picker if clicking on the left edge of the item (the tab)
+            const rect = this.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            
+            // If click is within first 15px (the tab area)
+            if (clickX <= 15) {
+                const itemId = this.dataset.id;
+                const itemType = this.dataset.type;
+                
+                // Show color picker
+                showColorPicker(itemId, itemType, this);
+                e.stopPropagation(); // Prevent event bubbling
+            }
+        });
+    });
+}
+
+// Show color picker menu
+function showColorPicker(itemId, itemType, targetElement) {
+    console.log(`Opening color picker for ${itemType} with id ${itemId}`);
+    
+    // Remove any existing color pickers
+    const existingPicker = document.getElementById('color-picker-menu');
+    if (existingPicker) {
+        existingPicker.remove();
+    }
+    
+    // Define preset colors
+    const presetColors = [
+        '#FF5252', // Red
+        '#FF7043', // Deep Orange
+        '#FFCA28', // Amber
+        '#66BB6A', // Green
+        '#26A69A', // Teal
+        '#42A5F5', // Blue
+        '#5C6BC0', // Indigo
+        '#AB47BC', // Purple
+        '#EC407A', // Pink
+        '#78909C'  // Blue Grey
+    ];
+    
+    // Get current color
+    let currentColor = '';
+    
+    try {
+        const itemColors = getItemColors();
+        if (itemColors && itemColors[itemType] && itemId) {
+            currentColor = itemColors[itemType][itemId] || '';
+        }
+    } catch (e) {
+        console.error('Error getting current color:', e);
+    }
+    
+    // Create color picker menu
+    const pickerMenu = document.createElement('div');
+    pickerMenu.id = 'color-picker-menu';
+    pickerMenu.className = 'color-picker-menu';
+    
+    // Create preset colors
+    let presetsHtml = '<div class="preset-colors">';
+    presetColors.forEach(color => {
+        const isSelected = color === currentColor ? 'selected' : '';
+        presetsHtml += `<div class="color-preset ${isSelected}" style="background-color: ${color};" data-color="${color}"></div>`;
+    });
+    presetsHtml += '</div>';
+    
+    // Create custom color picker
+    const customPickerHtml = `
+        <div class="custom-color-picker">
+            <label for="custom-color">Custom:</label>
+            <input type="color" id="custom-color" value="${currentColor || '#3498db'}">
+            <input type="text" id="hex-color" placeholder="#HEX" value="${currentColor || ''}">
+        </div>
+        <div class="color-picker-actions">
+            <button id="reset-color" class="reset-color-btn">Reset</button>
+            <button id="apply-color" class="apply-color-btn">Apply</button>
+        </div>
+    `;
+    
+    // Add all content to the menu
+    pickerMenu.innerHTML = presetsHtml + customPickerHtml;
+    
+    // Position the menu near the clicked element - handle different positioning for notes
+    const rect = targetElement.getBoundingClientRect();
+    
+    // Make sure the menu is always visible within viewport
+    const menuTop = Math.min(rect.top + 20, window.innerHeight - 300);
+    const menuLeft = Math.min(rect.left + 20, window.innerWidth - 250);
+    
+    pickerMenu.style.top = `${menuTop}px`;
+    pickerMenu.style.left = `${menuLeft}px`;
+    
+    // Add to the document
+    document.body.appendChild(pickerMenu);
+    
+    // Set up event listeners for the color picker
+    
+    // Preset color selection
+    pickerMenu.querySelectorAll('.color-preset').forEach(preset => {
+        preset.addEventListener('click', function() {
+            // Remove selected class from all presets
+            pickerMenu.querySelectorAll('.color-preset').forEach(p => p.classList.remove('selected'));
+            // Add selected class to clicked preset
+            this.classList.add('selected');
+            
+            // Update the color inputs
+            const color = this.dataset.color;
+            document.getElementById('custom-color').value = color;
+            document.getElementById('hex-color').value = color;
+            
+            // Apply the color immediately
+            applyColorToItem(itemId, itemType, color);
+        });
+    });
+    
+    // Custom color picker changes
+    document.getElementById('custom-color').addEventListener('input', function() {
+        document.getElementById('hex-color').value = this.value;
+        
+        // Remove selected class from all presets
+        pickerMenu.querySelectorAll('.color-preset').forEach(p => p.classList.remove('selected'));
+    });
+    
+    // Hex input changes
+    document.getElementById('hex-color').addEventListener('input', function() {
+        const hexValue = this.value;
+        // If it's a valid hex code, update the color picker
+        if (/^#[0-9A-F]{6}$/i.test(hexValue)) {
+            document.getElementById('custom-color').value = hexValue;
+            
+            // Remove selected class from all presets
+            pickerMenu.querySelectorAll('.color-preset').forEach(p => p.classList.remove('selected'));
+        }
+    });
+    
+    // Apply button click
+    document.getElementById('apply-color').addEventListener('click', function() {
+        const colorInput = document.getElementById('hex-color');
+        let color = colorInput.value;
+        
+        // Validate hex code format
+        if (color && !color.startsWith('#')) {
+            color = '#' + color;
+            colorInput.value = color;
+        }
+        
+        // Apply the color
+        applyColorToItem(itemId, itemType, color);
+        
+        console.log(`Applied color ${color} to ${itemType} ${itemId}`);
+        
+        // Close the picker
+        pickerMenu.remove();
+    });
+    
+    // Reset button click
+    document.getElementById('reset-color').addEventListener('click', function() {
+        applyColorToItem(itemId, itemType, '');
+        pickerMenu.remove();
+    });
+    
+    // Close menu when clicking outside
+    document.addEventListener('click', function closeColorPicker(e) {
+        if (!pickerMenu.contains(e.target) && e.target !== targetElement) {
+            pickerMenu.remove();
+            document.removeEventListener('click', closeColorPicker);
+        }
+    });
+}
+
+// Apply selected color to an item
+function applyColorToItem(itemId, itemType, color) {
+    console.log(`Applying color ${color} to ${itemType} with id ${itemId}`);
+    
+    // Update color in storage
+    const itemColors = getItemColors();
+    
+    if (color) {
+        // Make sure the itemType object exists
+        if (!itemColors[itemType]) {
+            itemColors[itemType] = {};
+        }
+        itemColors[itemType][itemId] = color;
+    } else {
+        // If empty color, remove the entry
+        if (itemColors[itemType]) {
+            delete itemColors[itemType][itemId];
+        }
+    }
+    
+    saveItemColors(itemColors);
+    
+    // Update the element in the DOM
+    let item = null;
+    
+    // First try using data attributes
+    if (itemType === 'note') {
+        // Special handling for notes
+        item = document.querySelector(`.note-item[data-id="${itemId}"]`);
+    } else {
+        // For tasks and events
+        item = document.querySelector(`[data-id="${itemId}"][data-type="${itemType}"]`);
+    }
+    
+    if (item) {
+        if (color) {
+            // Only apply color to the left border, never to the background
+            item.style.borderLeftColor = color;
+        } else {
+            // Reset to default border color
+            item.style.borderLeftColor = '';
+        }
+        console.log(`Color applied to element:`, item);
+    } else {
+        console.error(`Element not found for ${itemType} with id ${itemId}`);
+    }
+}
+
+// Add to existing document.addEventListener('DOMContentLoaded', () => { ... }
+// This can be added after all existing code in that event handler
+document.addEventListener('DOMContentLoaded', () => {
+    // Add CSS for the color picker and tabs
+    const style = document.createElement('style');
+    style.textContent = `
+        .event-item, .task-item, .note-item {
+            position: relative;
+            cursor: default;
+            border-left: 8px solid #3498db;
+            transition: border-left-color 0.2s ease;
+            background-color: transparent;
+        }
+        
+        .event-item, .task-item {
+            background-color: #2c2c2c;
+        }
+        
+        .note-item {
+            background-color: #222;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 3px;
+        }
+        
+        .dark-mode .event-item, .dark-mode .task-item {
+            background-color: #333;
+        }
+        
+        .dark-mode .note-item {
+            background-color: #333;
+        }
+        
+        .event-item:hover::before, .task-item:hover::before, .note-item:hover::before {
+            content: '';
+            position: absolute;
+            left: -8px;
+            top: 0;
+            bottom: 0;
+            width: 15px;
+            cursor: pointer;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .color-picker-menu {
+            position: fixed;
+            z-index: 1000;
+            background-color: #fff;
+            border-radius: 5px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+            padding: 10px;
+            min-width: 200px;
+            max-width: 300px;
+        }
+        
+        .dark-mode .color-picker-menu {
+            background-color: #333;
+            color: #eee;
+        }
+        
+        .preset-colors {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+        
+        .color-preset {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        
+        .color-preset:hover {
+            transform: scale(1.1);
+        }
+        
+        .color-preset.selected {
+            border-color: #fff;
+            box-shadow: 0 0 0 1px #000;
+        }
+        
+        .dark-mode .color-preset.selected {
+            border-color: #333;
+            box-shadow: 0 0 0 1px #fff;
+        }
+        
+        .custom-color-picker {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            gap: 5px;
+        }
+        
+        .custom-color-picker label {
+            flex: 0 0 auto;
+        }
+        
+        #custom-color {
+            width: 30px;
+            height: 30px;
+            border: none;
+            cursor: pointer;
+        }
+        
+        #hex-color {
+            flex: 1;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        
+        .dark-mode #hex-color {
+            background-color: #444;
+            color: #eee;
+            border-color: #555;
+        }
+        
+        .color-picker-actions {
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .reset-color-btn, .apply-color-btn {
+            padding: 5px 10px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        
+        .reset-color-btn {
+            background-color: #f1f1f1;
+            color: #333;
+        }
+        
+        .apply-color-btn {
+            background-color: #3498db;
+            color: white;
+        }
+        
+        .dark-mode .reset-color-btn {
+            background-color: #555;
+            color: #eee;
+        }
+        
+        .dark-mode .apply-color-btn {
+            background-color: #2980b9;
+        }
+    `;
+    document.head.appendChild(style);
+    
+    // Add tab color listeners after initial load
+    setTimeout(function() {
+        addTabColorListeners();
+        
+        // Add special direct listeners to notes
+        document.querySelectorAll('.note-item').forEach(note => {
+            note.addEventListener('click', function(e) {
+                const rect = this.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                
+                // If click is within first 15px (the tab area)
+                if (clickX <= 15) {
+                    const itemId = this.dataset.id;
+                    if (itemId) {
+                        // Show color picker
+                        showColorPicker(itemId, 'note', this);
+                        e.stopPropagation(); // Prevent event bubbling
+                    }
+                }
+            });
+        });
+    }, 1000);
+}); 
