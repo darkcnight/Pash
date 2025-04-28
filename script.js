@@ -1,10 +1,9 @@
-// App Configuration and Settings
+﻿// App Configuration and Settings
 let CONFIG = {
     CLIENT_ID: '',
     API_KEY: '',
     WEATHER_API_KEY: '',
     WEATHER_LOCATION: 'Singapore',
-    TIMEZONE: 'Asia/Singapore',
     DASHBOARD_TITLE: 'Pash',
     THEME: 'light', // 'light' or 'dark'
     SHOW_DATE: false, // Whether to show date with the time
@@ -131,57 +130,37 @@ function showToast(message, type = 'info', duration = 3000) {
 // Apply settings changes immediately without requiring a page refresh
 function applySettings(changedSettings) {
     // Track which settings were actually changed
-    let changes = {};
+    const changedSettingKeys = {};
     
-    // Check each setting type and apply changes accordingly
+    // Apply each setting that changed
     Object.keys(changedSettings).forEach(key => {
         const oldValue = CONFIG[key];
         const newValue = changedSettings[key];
         
-        // Skip if value didn't actually change
+        // Skip if no change
         if (oldValue === newValue) return;
         
-        // Mark this setting as changed
-        changes[key] = { from: oldValue, to: newValue };
+        // Mark as changed
+        changedSettingKeys[key] = true;
         
-        // Find and highlight the setting in the UI
-        highlightChangedSetting(key);
-        
-        // Apply specific changes based on setting type
+        // Apply specific settings
         switch (key) {
-            case 'CLIENT_ID':
-            case 'API_KEY':
-                // These require reinitialization of the Google API clients
-                if (gapiInited && gisInited) {
-                    // If already initialized, we'd need to reinitialize
-                    reinitializeGoogleAPIs();
-                }
+            case 'DASHBOARD_TITLE':
+                document.getElementById('dashboard-title').textContent = newValue;
+                document.title = newValue + " - Personal Dashboard";
                 break;
                 
-            case 'WEATHER_API_KEY':
-                // Reload weather data with new key
-                if (CONFIG.SHOW_WEATHER !== false) {
-                    // Only if weather is enabled
-                    setupWeather();
-                }
-                break;
-                
-            case 'TIMEZONE':
-                // Update clock
-                setupClock();
-                // Force immediate clock update
-                const updateClockFn = window.updateClockFn;
-                if (typeof updateClockFn === 'function') {
-                    updateClockFn();
-                }
-                // Refresh calendar and task dates (if initialized)
-                if (calendarAuthorized) {
-                    // Don't reload data, just refresh the display
-                    refreshCalendarDisplay();
-                }
-                if (tasksAuthorized) {
-                    // Don't reload data, just refresh the display
-                    refreshTasksDisplay();
+            case 'THEME':
+                if (newValue === 'dark') {
+                    document.body.classList.add('dark-mode');
+                    if (document.getElementById('theme-toggle')) {
+                        document.getElementById('theme-toggle').checked = true;
+                    }
+                } else {
+                    document.body.classList.remove('dark-mode');
+                    if (document.getElementById('theme-toggle')) {
+                        document.getElementById('theme-toggle').checked = false;
+                    }
                 }
                 break;
                 
@@ -224,7 +203,8 @@ function applySettings(changedSettings) {
         }
     });
     
-    return Object.keys(changes).length > 0 ? changes : null;
+    // Return the keys that were actually changed
+    return Object.keys(changedSettingKeys);
 }
 
 // Helper function to restore custom colors after theme change
@@ -269,9 +249,6 @@ function highlightChangedSetting(settingKey) {
             break;
         case 'WEATHER_API_KEY':
             element = document.getElementById('weather-api-key');
-            break;
-        case 'TIMEZONE':
-            element = document.getElementById('timezone-select');
             break;
         case 'CALENDAR_DAYS':
             element = document.getElementById('calendar-days-select');
@@ -347,12 +324,8 @@ function refreshTasksDisplay() {
             
             // Make sure the status indicator shows the last updated time
             if (statusIndicator) {
-                let updatedTime;
-                try {
-                    updatedTime = DateTime.now().setZone(CONFIG.TIMEZONE).toLocaleString(DateTime.TIME_SIMPLE);
-                } catch (error) {
-                    updatedTime = new Date().toLocaleTimeString();
-                }
+                // Use system timezone instead of configured timezone
+                let updatedTime = DateTime.now().toLocaleString(DateTime.TIME_SIMPLE);
                 statusIndicator.textContent = `Last updated: ${updatedTime}`;
             }
         } else {
@@ -454,10 +427,10 @@ function saveSettings(settings) {
         const previousSettings = { ...CONFIG };
         
         // Merge with existing settings
-        CONFIG = { ...CONFIG, ...settings };
+    CONFIG = { ...CONFIG, ...settings };
         
         // Save to localStorage
-        localStorage.setItem('dashboard_settings', JSON.stringify(CONFIG));
+    localStorage.setItem('dashboard_settings', JSON.stringify(CONFIG));
         
         // Handle immediate setting updates
         if (settings.CALENDAR_DAYS) {
@@ -596,17 +569,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Set up notes functionality (works without API keys)
     setupNotes();
     
-    // Set up clock (with timezone support)
+    // Set up clock
     setupClock();
     
     // Set up calendar window dropdown
     setupCalendarWindowDropdown();
-    
-    // Ensure timezone selector is populated
-    const timezoneSelect = document.getElementById('timezone-select');
-    if (timezoneSelect) {
-        populateTimezones(timezoneSelect);
-    }
     
     // Only attempt to load APIs if keys are provided and weather is enabled
     if (CONFIG.WEATHER_API_KEY && CONFIG.SHOW_WEATHER !== false) {
@@ -628,48 +595,28 @@ document.addEventListener('DOMContentLoaded', () => {
         // Load the Google API client library
         const script1 = document.createElement('script');
         script1.src = 'https://apis.google.com/js/api.js';
-        script1.onload = gapiLoaded;
+        script1.onload = function() {
+            console.log("Google API script loaded successfully");
+            gapiLoaded();
+        };
         document.body.appendChild(script1);
         
         // Load the Google Identity Services library
         const script2 = document.createElement('script');
         script2.src = 'https://accounts.google.com/gsi/client';
-        script2.onload = gisLoaded;
+        script2.onload = function() {
+            console.log("Google Identity Services script loaded successfully");
+            gisLoaded();
+        };
         document.body.appendChild(script2);
-        
-        // Add event listeners for refresh buttons
-        const refreshCalendarBtn = document.getElementById('refresh-calendar');
-        if (refreshCalendarBtn) {
-            refreshCalendarBtn.addEventListener('click', () => {
-                if (calendarAuthorized) {
-                    listCalendarEvents();
-                }
-            });
-        }
-        
-        const refreshTasksBtn = document.getElementById('refresh-tasks');
-        if (refreshTasksBtn) {
-            refreshTasksBtn.addEventListener('click', () => {
-                if (tasksAuthorized) {
-                    listTasks();
-                }
-            });
-        }
-        
-        // Set up the automatic refresh interval
-        setupAutoRefresh();
     } else {
-        // Show API keys missing error in calendar and tasks sections
-        const calendarSection = document.getElementById('calendar-section');
-        const tasksSection = document.getElementById('tasks-section');
-        
-        if (calendarSection) {
-            showError('calendar-section', 'API Keys Missing', 'Please configure Google API credentials in settings to use Calendar integration.');
-        }
-        
-        if (tasksSection) {
-            showError('tasks-section', 'API Keys Missing', 'Please configure Google API credentials in settings to use Tasks integration.');
-        }
+        console.log("Google API keys not provided in CONFIG. Google services disabled.");
+        document.getElementById('calendar-content').innerHTML = `
+            <div>Google API keys not configured. Set them in ⚙️ settings.</div>
+        `;
+        document.getElementById('tasks-content').innerHTML = `
+            <div>Google API keys not configured. Set them in ⚙️ settings.</div>
+        `;
     }
 });
 
@@ -807,52 +754,20 @@ function gisLoaded() {
 
 // Enable the authorize buttons if both API clients are initialized
 function maybeEnableButtons() {
-    console.log("📌 maybeEnableButtons() called");
-    console.log("📌 gapiInited:", gapiInited);
-    console.log("📌 gisInited:", gisInited);
-    
     if (gapiInited && gisInited) {
-        console.log("📌 Both APIs are initialized, setting up auth buttons");
-        
-        const calendarAuthButton = document.getElementById('authorize-calendar');
-        const tasksAuthButton = document.getElementById('authorize-tasks');
-        
-        if (calendarAuthButton) {
-            console.log("📌 Found calendar auth button, attaching click handler");
-            calendarAuthButton.onclick = handleCalendarAuthClick;
-        } else {
-            console.log("📌 WARNING: Calendar auth button not found in the DOM");
+        // Calendar buttons
+        const authorizeCalendarButton = document.getElementById('authorize-calendar');
+        if (authorizeCalendarButton) {
+            authorizeCalendarButton.disabled = false;
+            authorizeCalendarButton.onclick = handleCalendarAuthClick;
         }
         
-        if (tasksAuthButton) {
-            console.log("📌 Found tasks auth button, attaching click handler");
-            tasksAuthButton.onclick = handleTasksAuthClick;
-        } else {
-            console.log("📌 WARNING: Tasks auth button not found in the DOM");
+        // Tasks buttons
+        const authorizeTasksButton = document.getElementById('authorize-tasks');
+        if (authorizeTasksButton) {
+            authorizeTasksButton.disabled = false;
+            authorizeTasksButton.onclick = handleTasksAuthClick;
         }
-        
-        // Check if we have a token in local storage
-        const token = localStorage.getItem('gapi_token');
-        console.log("📌 Stored token in localStorage:", token ? "Present" : "Missing");
-        
-        if (token) {
-            // Try to use the stored token
-            try {
-                console.log("📌 Setting stored token to gapi.client");
-                gapi.client.setToken(JSON.parse(token));
-                console.log("📌 Token successfully set, calling auth success handlers");
-                handleCalendarAuthSuccess();
-                handleTasksAuthSuccess();
-            } catch (err) {
-                console.error('📌 Error setting stored token:', err);
-                console.error('📌 Token value might be invalid, removing from localStorage');
-                localStorage.removeItem('gapi_token');
-            }
-        } else {
-            console.log("📌 No token in localStorage, user will need to authenticate");
-        }
-    } else {
-        console.log("📌 APIs not fully initialized yet. Cannot enable buttons.");
     }
 }
 
@@ -905,37 +820,31 @@ function populateTimezones(selectElement) {
 
 // Handle authorization for Calendar
 function handleCalendarAuthClick() {
-    console.log("📌 handleCalendarAuthClick() called");
-    console.log("📌 tokenClient:", tokenClient ? "Available" : "Missing");
+    if (!tokenClient) {
+        console.error("Token client not initialized");
+        showToast("Error: Token client not initialized", "error");
+        return;
+    }
     
-    try {
-        console.log("📌 Setting up tokenClient callback for Calendar auth");
-        tokenClient.callback = async (resp) => {
-            console.log("📌 Auth callback received for Calendar:", resp ? "Response received" : "No response");
+    // Callback after token is obtained
+    tokenClient.callback = (resp) => {
             if (resp.error !== undefined) {
-                console.error("📌 Auth error in callback:", resp.error);
-                throw resp;
+            console.error("Error getting auth token:", resp);
+            showToast("Error signing in to Calendar", "error");
+            return;
             }
-            console.log("📌 Auth successful, storing token");
-            // Store the token in local storage
-            const token = gapi.client.getToken();
-            console.log("📌 Token obtained:", token ? "Valid token" : "No token received");
-            localStorage.setItem('gapi_token', JSON.stringify(token));
+        
             handleCalendarAuthSuccess();
-            handleTasksAuthSuccess(); // Both APIs use the same token
         };
         
+    // If there's no token, prompt for one
         if (gapi.client.getToken() === null) {
-            console.log("📌 No existing token, requesting with consent prompt");
-            tokenClient.requestAccessToken({ prompt: 'consent' });
+        tokenClient.requestAccessToken({
+            hint: ""
+        });
         } else {
-            console.log("📌 Existing token found, requesting without prompt");
-            tokenClient.requestAccessToken({ prompt: '' });
-        }
-    } catch (error) {
-        console.error('📌 Error during Calendar authorization:', error);
-        console.error('📌 Error details:', JSON.stringify(error, null, 2));
-        showError('calendar-section', 'Authorization Error', 'Failed to authorize Calendar access. Please try again later.');
+        // We already have a token, just refresh data
+        handleCalendarAuthSuccess();
     }
 }
 
@@ -1259,7 +1168,7 @@ function setupNotes() {
             noteElement.appendChild(noteContent);
             
             // Add to the notes list
-            notesList.appendChild(noteElement);
+                notesList.appendChild(noteElement);
         });
         
         // Add event listeners for edit and delete buttons
@@ -1709,8 +1618,8 @@ function setupClock() {
     
     function updateClock() {
         try {
-            // Use the configured timezone
-            const now = DateTime.now().setZone(CONFIG.TIMEZONE);
+            // Use system timezone instead of configured timezone
+            const now = DateTime.now();
             let formatted;
             
             if (CONFIG.SHOW_DATE) {
@@ -1993,14 +1902,8 @@ function listCalendarEvents() {
     // Show loading state
     statusIndicator.innerHTML = 'Loading events... <div class="loader"></div>';
     
-    // Get events from today in the user's timezone
-    let today;
-    try {
-        today = DateTime.now().setZone(CONFIG.TIMEZONE).startOf('day');
-    } catch (error) {
-        console.error('Error setting timezone for calendar:', error);
-        today = DateTime.now().startOf('day');
-    }
+    // Get events from today in the system timezone instead of user's configured timezone
+    let today = DateTime.now().startOf('day');
     
     // Get events up to specified number of days from now
     let nextWeek = today.plus({ days: CONFIG.CALENDAR_DAYS });
@@ -2018,7 +1921,7 @@ function listCalendarEvents() {
             
             const events = response.result.items;
             displayCalendarEvents(events);
-            statusIndicator.textContent = `Last updated: ${DateTime.now().setZone(CONFIG.TIMEZONE).toLocaleString(DateTime.TIME_SIMPLE)}`;
+            statusIndicator.textContent = `Last updated: ${DateTime.now().toLocaleString(DateTime.TIME_SIMPLE)}`;
         }).catch(error => {
             console.error('Error fetching calendar events:', error);
             statusIndicator.textContent = 'Error loading events. Try refreshing.';
@@ -2054,16 +1957,10 @@ function displayCalendarEvents(events) {
         
         // Group events by day
         const eventsByDay = {};
-        let today, tomorrow;
         
-        try {
-            today = DateTime.now().setZone(CONFIG.TIMEZONE).startOf('day');
-            tomorrow = today.plus({ days: 1 });
-        } catch (error) {
-            console.error('Error setting timezone for event display:', error);
-            today = DateTime.now().startOf('day');
-            tomorrow = today.plus({ days: 1 });
-        }
+        // Use system timezone instead of configured timezone
+        const today = DateTime.now().startOf('day');
+        const tomorrow = today.plus({ days: 1 });
         
         events.forEach(event => {
             // Skip hidden events
@@ -2071,7 +1968,7 @@ function displayCalendarEvents(events) {
                 return;
             }
             
-            // Parse event start time (with timezone support)
+            // Parse event start time (with system timezone)
             let start;
             if (event.start.dateTime) {
                 start = DateTime.fromISO(event.start.dateTime);
@@ -2106,13 +2003,15 @@ function displayCalendarEvents(events) {
             eventsByDay[day].forEach(event => {
                 let start, end;
                 if (event.start.dateTime) {
-                    start = DateTime.fromISO(event.start.dateTime).setZone(CONFIG.TIMEZONE);
+                    // Use system timezone instead of configured timezone
+                    start = DateTime.fromISO(event.start.dateTime);
                 } else {
-                    start = DateTime.fromISO(event.start.date).setZone(CONFIG.TIMEZONE);
+                    start = DateTime.fromISO(event.start.date);
                 }
                 
                 if (event.end && event.end.dateTime) {
-                    end = DateTime.fromISO(event.end.dateTime).setZone(CONFIG.TIMEZONE);
+                    // Use system timezone instead of configured timezone
+                    end = DateTime.fromISO(event.end.dateTime);
                 }
                 
                 let timeStr;
@@ -2223,13 +2122,8 @@ function listTasks() {
             
             displayTasks(tasks);
             
-            let updatedTime;
-            try {
-                updatedTime = DateTime.now().setZone(CONFIG.TIMEZONE).toLocaleString(DateTime.TIME_SIMPLE);
-            } catch (error) {
-                updatedTime = new Date().toLocaleTimeString();
-            }
-            
+            // Use system timezone instead of configured timezone
+            const updatedTime = DateTime.now().toLocaleString(DateTime.TIME_SIMPLE);
             statusIndicator.textContent = `Last updated: ${updatedTime}`;
         }).catch(error => {
             console.error('Error fetching tasks:', error);
@@ -2263,12 +2157,8 @@ function displayTasks(tasks) {
         addTaskInputElement(tasksContent);
         
         // Make sure status indicator is visible
-        let updatedTime;
-        try {
-            updatedTime = DateTime.now().setZone(CONFIG.TIMEZONE).toLocaleString(DateTime.TIME_SIMPLE);
-        } catch (error) {
-            updatedTime = new Date().toLocaleTimeString();
-        }
+        // Use system timezone instead of configured timezone
+        const updatedTime = DateTime.now().toLocaleString(DateTime.TIME_SIMPLE);
         statusIndicator.textContent = `Last updated: ${updatedTime}`;
         return;
     }
@@ -2296,16 +2186,9 @@ function displayTasks(tasks) {
         // Filter out completed tasks (they should not be displayed)
         const displayTasks = tasks.filter(task => task.status !== 'completed');
         
-        // Setup timezone for due dates
-        let today, tomorrow;
-        try {
-            today = DateTime.now().setZone(CONFIG.TIMEZONE).startOf('day');
-            tomorrow = today.plus({ days: 1 });
-        } catch (error) {
-            console.error('Error setting timezone for tasks:', error);
-            today = DateTime.now().startOf('day');
-            tomorrow = today.plus({ days: 1 });
-        }
+        // Setup timezone for due dates - use system timezone instead of configured timezone
+        const today = DateTime.now().startOf('day');
+        const tomorrow = today.plus({ days: 1 });
         
         // Make sure we have a task list ID
         if (!window.currentTaskListId && window.lastTasksResponse?.result?.items) {
@@ -2333,12 +2216,8 @@ function displayTasks(tasks) {
             let dueDate = null;
             
             if (task.due) {
-                try {
-                    dueDate = DateTime.fromISO(task.due).setZone(CONFIG.TIMEZONE);
-                } catch (error) {
-                    console.error('Error parsing task due date:', error);
-                    dueDate = new Date(task.due);
-                }
+                // Use system timezone instead of configured timezone
+                dueDate = DateTime.fromISO(task.due);
             }
             
             let dueStr = '';
@@ -3232,57 +3111,31 @@ function clearHiddenItemsByType(type) {
     } else if (type === 'task' && tasksAuthorized) {
         listTasks();
     }
-}
+} 
 
 // Set up calendar window dropdown functionality
 function setupCalendarWindowDropdown() {
-    const calendarWindowBtn = document.getElementById('calendar-window-btn');
-    const calendarWindowDropdown = document.getElementById('calendar-window-dropdown');
+    // Get the dropdown element in the calendar section header
     const calendarWindowSelect = document.getElementById('calendar-window-select');
-    const settingsCalendarWindowSelect = document.getElementById('calendar-days-select');
     
-    // Hide dropdown initially
-    calendarWindowDropdown.style.display = 'none';
-    
-    // Set initial value from CONFIG
-    calendarWindowSelect.value = CONFIG.CALENDAR_DAYS || '7';
-    
-    // Toggle dropdown visibility when button is clicked
-    calendarWindowBtn.addEventListener('click', () => {
-        if (calendarWindowDropdown.style.display === 'none') {
-            calendarWindowDropdown.style.display = 'block';
-        } else {
-            calendarWindowDropdown.style.display = 'none';
-        }
-    });
-    
-    // Handle value change
-    calendarWindowSelect.addEventListener('change', () => {
-        const newValue = parseInt(calendarWindowSelect.value, 10);
-        
-        // Save to CONFIG and update settings modal dropdown
-        CONFIG.CALENDAR_DAYS = newValue;
-        if (settingsCalendarWindowSelect) {
-            settingsCalendarWindowSelect.value = newValue.toString();
+    if (calendarWindowSelect) {
+        // Set the initial value to match the current setting
+        if (CONFIG.CALENDAR_DAYS) {
+            calendarWindowSelect.value = CONFIG.CALENDAR_DAYS.toString();
         }
         
-        // Save the settings and reload calendar events
-        saveSettings({ CALENDAR_DAYS: newValue });
-        
-        // Close the dropdown
-        calendarWindowDropdown.style.display = 'none';
-    });
-    
-    // Close the dropdown when clicking outside
-    document.addEventListener('click', (event) => {
-        if (!calendarWindowBtn.contains(event.target) && 
-            !calendarWindowDropdown.contains(event.target)) {
-            calendarWindowDropdown.style.display = 'none';
-        }
-    });
-    
-    // Update synchronization in the setupSettingsModal function
-    // This will be handled by modifying the saveSettings function to update both dropdowns
+        // Add change event listener
+        calendarWindowSelect.addEventListener('change', () => {
+            const days = parseInt(calendarWindowSelect.value, 10);
+            CONFIG.CALENDAR_DAYS = days;
+            saveSettings(CONFIG);
+            
+            // Reload calendar events to reflect the new setting
+            if (calendarAuthorized) {
+                listCalendarEvents();
+            }
+        });
+    }
 }
 
 // Get item colors from localStorage
@@ -3452,7 +3305,6 @@ function setupSettingsModal() {
     const clientIdInput = document.getElementById('google-client-id');
     const apiKeyInput = document.getElementById('google-api-key');
     const weatherApiKeyInput = document.getElementById('weather-api-key');
-    const timezoneInput = document.getElementById('timezone-select');
     const themeToggle = document.getElementById('theme-toggle');
     const dateToggle = document.getElementById('date-toggle');
     const weatherToggle = document.getElementById('weather-toggle');
@@ -3463,18 +3315,12 @@ function setupSettingsModal() {
         clientIdInput: !!clientIdInput,
         apiKeyInput: !!apiKeyInput,
         weatherApiKeyInput: !!weatherApiKeyInput,
-        timezoneInput: !!timezoneInput,
         themeToggle: !!themeToggle,
         dateToggle: !!dateToggle,
         weatherToggle: !!weatherToggle,
         calendarDaysSelect: !!calendarDaysSelect,
         clockFormatToggle: !!clockFormatToggle
     });
-    
-    // Populate the timezone dropdown
-    if (timezoneInput) {
-        populateTimezones(timezoneInput);
-    }
     
     // Open modal when settings button is clicked
     if (settingsButton) {
@@ -3483,11 +3329,6 @@ function setupSettingsModal() {
             if (clientIdInput) clientIdInput.value = CONFIG.CLIENT_ID || '';
             if (apiKeyInput) apiKeyInput.value = CONFIG.API_KEY || '';
             if (weatherApiKeyInput) weatherApiKeyInput.value = CONFIG.WEATHER_API_KEY || '';
-            
-            // Set timezone dropdown
-            if (timezoneInput && CONFIG.TIMEZONE) {
-                timezoneInput.value = CONFIG.TIMEZONE;
-            }
             
             // Set toggle switches
             if (themeToggle) themeToggle.checked = CONFIG.THEME === 'dark';
@@ -3544,7 +3385,7 @@ function setupSettingsModal() {
     if (weatherToggle) {
         weatherToggle.addEventListener('change', () => {
             CONFIG.SHOW_WEATHER = weatherToggle.checked;
-            toggleWeatherDisplay(CONFIG.SHOW_WEATHER);
+            toggleWeatherDisplay(weatherToggle.checked);
             saveSettings(CONFIG);
         });
     }
@@ -3558,27 +3399,26 @@ function setupSettingsModal() {
         });
     }
     
-    // Save settings when save button is clicked
-    if (saveSettingsBtn && settingsModal && modalOverlay) {
+    // Save settings button
+    if (saveSettingsBtn) {
         saveSettingsBtn.addEventListener('click', () => {
-            console.log("📌 Save settings button clicked");
-            
-            const settings = {
+            // Get settings from form
+            const newSettings = {
                 CLIENT_ID: clientIdInput ? clientIdInput.value.trim() : '',
                 API_KEY: apiKeyInput ? apiKeyInput.value.trim() : '',
                 WEATHER_API_KEY: weatherApiKeyInput ? weatherApiKeyInput.value.trim() : '',
-                TIMEZONE: timezoneInput ? timezoneInput.value.trim() : 'auto',
                 THEME: themeToggle && themeToggle.checked ? 'dark' : 'light',
                 SHOW_DATE: dateToggle ? dateToggle.checked : false,
                 SHOW_WEATHER: weatherToggle ? weatherToggle.checked : true,
-                CALENDAR_DAYS: calendarDaysSelect ? parseInt(calendarDaysSelect.value) : 7,
-                CLOCK_24H: clockFormatToggle ? !clockFormatToggle.checked : true
+                CLOCK_24H: clockFormatToggle ? !clockFormatToggle.checked : true,
+                CALENDAR_DAYS: calendarDaysSelect ? parseInt(calendarDaysSelect.value, 10) : 7
             };
             
-            console.log("📌 New settings to save:", settings);
+            // Save settings
+            saveSettings(newSettings);
             
-            // Apply and save the settings
-            saveSettings(settings);
+            // Show success toast
+            showToast('Settings saved successfully', 'success');
             
             // Close the modal
             settingsModal.style.display = 'none';
@@ -3660,30 +3500,10 @@ function debugGoogleApiIssues() {
     console.log("  - Potential blockers:", "Check for ad-blockers, privacy extensions");
     
     console.log("=============== END DEBUG INFO ===============");
-    
-    // Tell the user what to do with this info
-    showToast("Debug info logged to console. Press F12 to view.", "info", 5000);
 }
 
 // Run the debug function during initialization
 document.addEventListener('DOMContentLoaded', function() {
-    // Run other initialization first
-    // ...
-
-    // Add debug button to UI
-    const calendarSection = document.getElementById('calendar-section');
-    if (calendarSection) {
-        const sectionControls = calendarSection.querySelector('.section-controls');
-        if (sectionControls) {
-            const debugButton = document.createElement('button');
-            debugButton.className = 'debug-button';
-            debugButton.innerHTML = '<i class="fas fa-bug"></i>';
-            debugButton.title = 'Debug Google API Issues';
-            debugButton.addEventListener('click', debugGoogleApiIssues);
-            sectionControls.appendChild(debugButton);
-        }
-    }
-    
-    // Run debug automatically after 3 seconds
+    // Run debug automatically after 3 seconds - hidden from user
     setTimeout(debugGoogleApiIssues, 3000);
 });
