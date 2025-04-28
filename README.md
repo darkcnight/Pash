@@ -6,14 +6,14 @@ Pash is a minimalist personal dashboard for your browser. It integrates Google C
 
 ## Features
 
-- ★ View your **Google Calendar** events
-- ★ Manage your **Google Tasks**
-- ★ Create and edit **rich-text notes** (powered by Quill.js)
-- ★ Display **current weather** (requires OpenWeatherMap API key)
-- ★ Live clock (uses **system timezone** automatically)
-- ★ **Dark mode** and **light mode** themes
-- ★ **Persistent settings** saved in your browser (localStorage)
-- ★ **No backend** required
+★ View your **Google Calendar** events
+★ Manage your **Google Tasks**
+★ Create and edit **rich-text notes** (powered by Quill.js)
+★ Display **current weather** (requires OpenWeatherMap API key)
+★ Live clock (uses **system timezone** automatically)
+★ **Dark mode** and **light mode** themes
+★ **Persistent settings** saved in your browser (localStorage)
+★ **No backend** required
 
 *Stretch goal: an Electron-based app version in the future.*
 
