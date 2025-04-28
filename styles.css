@@ -107,6 +107,40 @@ body {
     margin-top: 5px;
 }
 
+/* Sortable container for panes */
+.sortable-container {
+    display: flex;
+    width: 100%;
+    gap: 20px;
+}
+
+/* Drag handle styling */
+.drag-handle {
+    cursor: move;
+    color: var(--secondary-text);
+    margin-right: 10px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    display: flex;
+    align-items: center;
+}
+
+.section:hover .drag-handle {
+    opacity: 0.7;
+}
+
+.section-title-container {
+    display: flex;
+    align-items: center;
+}
+
+/* Style for the section that's being dragged */
+.sortable-ghost {
+    opacity: 0.4;
+    background-color: var(--border-color);
+}
+
+/* Section styling */
 .section {
     flex: 1;
     background-color: var(--section-bg);

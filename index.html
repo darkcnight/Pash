@@ -39,73 +39,85 @@
     </div>
 
     <div class="dashboard">
-        <div class="section" id="calendar-section">
-            <div class="section-header">
-                <h2 class="section-title">Calendar</h2>
-                <div class="section-controls">
-                    <button class="calendar-window-btn" id="calendar-window-btn"><i class="fas fa-chevron-down"></i></button>
-                    <button class="refresh-button" id="refresh-calendar"><i class="fas fa-sync-alt"></i></button>
+        <div class="sortable-container" id="sortable-panes">
+            <div class="section" id="calendar-section" data-type="pane">
+                <div class="section-header">
+                    <div class="section-title-container">
+                        <span class="drag-handle"><i class="fas fa-grip-vertical"></i></span>
+                        <h2 class="section-title">Calendar</h2>
+                    </div>
+                    <div class="section-controls">
+                        <button class="calendar-window-btn" id="calendar-window-btn"><i class="fas fa-chevron-down"></i></button>
+                        <button class="refresh-button" id="refresh-calendar"><i class="fas fa-sync-alt"></i></button>
+                    </div>
                 </div>
+                <div id="calendar-window-dropdown" class="calendar-window-dropdown">
+                    <div class="dropdown-content">
+                        <div class="dropdown-item">
+                            <label for="calendar-window-select">Calendar Window:</label>
+                            <select id="calendar-window-select">
+                                <option value="7">1 Week</option>
+                                <option value="14">2 Weeks</option>
+                                <option value="21">3 Weeks</option>
+                                <option value="28">4 Weeks</option>
+                                <option value="35">5 Weeks</option>
+                                <option value="42">6 Weeks</option>
+                                <option value="49">7 Weeks</option>
+                                <option value="56">8 Weeks</option>
+                                <option value="63">9 Weeks</option>
+                                <option value="70">10 Weeks</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="section-content" id="calendar-content">
+                    <div class="login-prompt" id="calendar-login-prompt">
+                        <p>Sign in to view your Google Calendar events</p>
+                        <button class="login-button" id="authorize-calendar">Sign In</button>
+                    </div>
+                </div>
+                <div class="status-indicator" id="calendar-status"></div>
             </div>
-            <div id="calendar-window-dropdown" class="calendar-window-dropdown">
-                <div class="dropdown-content">
-                    <div class="dropdown-item">
-                        <label for="calendar-window-select">Calendar Window:</label>
-                        <select id="calendar-window-select">
-                            <option value="7">1 Week</option>
-                            <option value="14">2 Weeks</option>
-                            <option value="21">3 Weeks</option>
-                            <option value="28">4 Weeks</option>
-                            <option value="35">5 Weeks</option>
-                            <option value="42">6 Weeks</option>
-                            <option value="49">7 Weeks</option>
-                            <option value="56">8 Weeks</option>
-                            <option value="63">9 Weeks</option>
-                            <option value="70">10 Weeks</option>
-                        </select>
+
+            <div class="section" id="tasks-section" data-type="pane">
+                <div class="section-header">
+                    <div class="section-title-container">
+                        <span class="drag-handle"><i class="fas fa-grip-vertical"></i></span>
+                        <h2 class="section-title">Tasks</h2>
+                    </div>
+                    <div class="section-controls">
+                        <button class="refresh-button" id="refresh-tasks"><i class="fas fa-sync-alt"></i></button>
+                    </div>
+                </div>
+                <div class="section-content" id="tasks-content">
+                    <div class="login-prompt" id="tasks-login-prompt">
+                        <p>Sign in to view your Google Tasks</p>
+                        <button class="login-button" id="authorize-tasks">Sign In</button>
+                    </div>
+                </div>
+                <div class="status-indicator" id="tasks-status"></div>
+            </div>
+
+            <div class="section" id="notes-section" data-type="pane">
+                <div class="section-header">
+                    <div class="section-title-container">
+                        <span class="drag-handle"><i class="fas fa-grip-vertical"></i></span>
+                        <h2 class="section-title">Notes</h2>
+                    </div>
+                    <span></span>
+                </div>
+                <div class="notes-container">
+                    <div class="section-content notes-list" id="notes-list">
+                        <!-- Notes will be added here dynamically -->
+                    </div>
+                    <div class="note-input-container">
+                        <!-- Replace textarea with Quill editor -->
+                        <div id="quill-editor"></div>
+                        <button class="note-send-btn" id="note-send"><i class="fas fa-plus"></i></button>
                     </div>
                 </div>
             </div>
-            <div class="section-content" id="calendar-content">
-                <div class="login-prompt" id="calendar-login-prompt">
-                    <p>Sign in to view your Google Calendar events</p>
-                    <button class="login-button" id="authorize-calendar">Sign In</button>
-                </div>
-            </div>
-            <div class="status-indicator" id="calendar-status"></div>
-        </div>
-
-        <div class="section" id="tasks-section">
-            <div class="section-header">
-                <h2 class="section-title">Tasks</h2>
-                <div class="section-controls">
-                    <button class="refresh-button" id="refresh-tasks"><i class="fas fa-sync-alt"></i></button>
-                </div>
-            </div>
-            <div class="section-content" id="tasks-content">
-                <div class="login-prompt" id="tasks-login-prompt">
-                    <p>Sign in to view your Google Tasks</p>
-                    <button class="login-button" id="authorize-tasks">Sign In</button>
-                </div>
-            </div>
-            <div class="status-indicator" id="tasks-status"></div>
-        </div>
-
-        <div class="section" id="notes-section">
-            <div class="section-header">
-                <h2 class="section-title">Notes</h2>
-                <span></span>
-            </div>
-            <div class="notes-container">
-                <div class="section-content notes-list" id="notes-list">
-                    <!-- Notes will be added here dynamically -->
-                </div>
-                <div class="note-input-container">
-                    <!-- Replace textarea with Quill editor -->
-                    <div id="quill-editor"></div>
-                    <button class="note-send-btn" id="note-send"><i class="fas fa-plus"></i></button>
-                </div>
-            </div>
+            
         </div>
     </div>
 
@@ -227,7 +239,7 @@
                 <button id="title-save" class="settings-save-btn">Save</button>
             </div>
         </div>
-                        </div>
+    </div>
 
     <!-- Overlay for modal -->
     <div class="modal-overlay" id="modal-overlay"></div>
@@ -246,6 +258,9 @@
     
     <!-- Quill JS for rich text editing -->
     <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    
+    <!-- Sortable.js for draggable panes -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     
     <script src="script.js"></script>
 </body>

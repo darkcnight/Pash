@@ -575,6 +575,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Set up calendar window dropdown
     setupCalendarWindowDropdown();
     
+    // Set up sortable panes
+    setupSortablePanes();
+    
     // Only attempt to load APIs if keys are provided and weather is enabled
     if (CONFIG.WEATHER_API_KEY && CONFIG.SHOW_WEATHER !== false) {
         // Set up weather
@@ -755,6 +758,42 @@ function gisLoaded() {
 // Enable the authorize buttons if both API clients are initialized
 function maybeEnableButtons() {
     if (gapiInited && gisInited) {
+        // Attempt to load token from localStorage first
+        const storedToken = localStorage.getItem('gapi_token');
+        if (storedToken) {
+            try {
+                const token = JSON.parse(storedToken);
+                // Check if token has expired (optional, but good practice)
+                // Note: Google tokens usually last 1 hour
+                if (token && token.expires_at && Date.now() < token.expires_at) {
+                    console.log("📌 Found valid token in localStorage, applying...");
+                    gapi.client.setToken(token);
+                    
+                    // If token is set successfully, update auth state and UI
+                    if (gapi.client.getToken()) { 
+                        calendarAuthorized = true;
+                        tasksAuthorized = true;
+                        console.log("📌 Token applied successfully. Fetching data.");
+                        handleCalendarAuthSuccess(); // Hides prompt, lists events
+                        handleTasksAuthSuccess();   // Hides prompt, lists tasks
+                        return; // Skip enabling buttons if already authorized
+                    } else {
+                        console.warn("📌 Failed to apply stored token.");
+                        localStorage.removeItem('gapi_token'); // Clear invalid token
+                    }
+                } else {
+                    console.log("📌 Stored token is missing, invalid, or expired. Clearing.");
+                    localStorage.removeItem('gapi_token');
+                }
+            } catch (error) {
+                console.error("📌 Error parsing stored token:", error);
+                localStorage.removeItem('gapi_token'); // Clear corrupted token
+            }
+        }
+        
+        // If no valid token was loaded, enable the sign-in buttons
+        console.log("📌 No valid token found or applied. Enabling sign-in buttons.");
+        
         // Calendar buttons
         const authorizeCalendarButton = document.getElementById('authorize-calendar');
         if (authorizeCalendarButton) {
@@ -828,23 +867,46 @@ function handleCalendarAuthClick() {
     
     // Callback after token is obtained
     tokenClient.callback = (resp) => {
-            if (resp.error !== undefined) {
+        if (resp.error !== undefined) {
             console.error("Error getting auth token:", resp);
             showToast("Error signing in to Calendar", "error");
-            return;
+            // Check for specific errors like popup closed
+            if (resp.error === 'popup_closed_by_user') {
+                 showToast('Sign-in cancelled by user', 'info');
+            } else if (resp.error === 'access_denied') {
+                 showToast('Permissions denied for Google services', 'warning');
             }
+            return;
+        }
         
-            handleCalendarAuthSuccess();
-        };
+        // Store the token in local storage, adding expiry time
+        const tokenResponse = gapi.client.getToken();
+        if (tokenResponse) {
+            // Calculate expiry time (expires_in is in seconds)
+            const expiresIn = tokenResponse.expires_in * 1000; // Convert to milliseconds
+            const expiresAt = Date.now() + expiresIn;
+            const tokenToStore = { ...tokenResponse, expires_at: expiresAt };
+            
+            console.log("📌 Token obtained via Calendar button:", tokenToStore);
+            localStorage.setItem('gapi_token', JSON.stringify(tokenToStore));
+        } else {
+             console.warn("📌 No token received after successful auth callback (Calendar)");
+        }
+        
+        // Call success handlers for BOTH services
+        handleCalendarAuthSuccess();
+        handleTasksAuthSuccess(); 
+    };
         
     // If there's no token, prompt for one
-        if (gapi.client.getToken() === null) {
-        tokenClient.requestAccessToken({
-            hint: ""
-        });
-        } else {
-        // We already have a token, just refresh data
-        handleCalendarAuthSuccess();
+    if (gapi.client.getToken() === null) {
+        console.log("📌 No existing token, requesting with consent prompt for Calendar");
+        // Use prompt: 'consent' to ensure user sees the permissions screen
+        tokenClient.requestAccessToken({ prompt: 'consent' }); 
+    } else {
+        console.log("📌 Existing token found, requesting without prompt for Calendar");
+        // We already have a token, potentially just need to refresh data or ensure scopes
+        tokenClient.requestAccessToken({ prompt: '' });
     }
 }
 
@@ -862,10 +924,21 @@ function handleTasksAuthClick() {
                 throw resp;
             }
             console.log("📌 Auth successful, storing token");
-            // Store the token in local storage
-            const token = gapi.client.getToken();
-            console.log("📌 Token obtained:", token ? "Valid token" : "No token received");
-            localStorage.setItem('gapi_token', JSON.stringify(token));
+            
+            // Store the token in local storage, adding expiry time
+            const tokenResponse = gapi.client.getToken();
+            if (tokenResponse) {
+                // Calculate expiry time (expires_in is in seconds)
+                const expiresIn = tokenResponse.expires_in * 1000; // Convert to milliseconds
+                const expiresAt = Date.now() + expiresIn;
+                const tokenToStore = { ...tokenResponse, expires_at: expiresAt };
+                
+                console.log("📌 Token obtained via Tasks button:", tokenToStore);
+                localStorage.setItem('gapi_token', JSON.stringify(tokenToStore));
+            } else {
+                console.warn("📌 No token received after successful auth callback (Tasks)");
+            }
+
             handleCalendarAuthSuccess(); // Both APIs use the same token
             handleTasksAuthSuccess();
         };
@@ -3507,3 +3580,60 @@ document.addEventListener('DOMContentLoaded', function() {
     // Run debug automatically after 3 seconds - hidden from user
     setTimeout(debugGoogleApiIssues, 3000);
 });
+
+// Add setupSortablePanes function to initialize Sortable.js for the panes
+function setupSortablePanes() {
+    // Get main sortable container
+    const sortableContainer = document.getElementById('sortable-panes');
+    
+    if (!sortableContainer) {
+        console.warn('Sortable container not found');
+        return;
+    }
+
+    // Load saved pane order FIRST
+    loadPaneOrder();
+    
+    // Initialize the main sortable container for panes
+    const sortablePanes = new Sortable(sortableContainer, {
+        animation: 150,
+        handle: '.drag-handle',
+        ghostClass: 'sortable-ghost',
+        onEnd: function(evt) {
+            // Save the new pane order
+            savePaneOrder();
+        }
+    });
+}
+
+// Save the order of panes to localStorage
+function savePaneOrder() {
+    const panes = document.querySelectorAll('.section[data-type="pane"]');
+    const paneOrder = Array.from(panes).map(pane => pane.id);
+    
+    localStorage.setItem('paneOrder', JSON.stringify(paneOrder));
+    console.log('Saved pane order:', paneOrder);
+}
+
+// Load and apply the saved pane order from localStorage
+function loadPaneOrder() {
+    const savedOrder = localStorage.getItem('paneOrder');
+    if (!savedOrder) return;
+    
+    try {
+        const paneOrder = JSON.parse(savedOrder);
+        const container = document.getElementById('sortable-panes');
+        
+        // Reorder the panes according to the saved order
+        paneOrder.forEach(paneId => {
+            const pane = document.getElementById(paneId);
+            if (pane) container.appendChild(pane);
+        });
+        
+        console.log('Loaded pane order:', paneOrder);
+    } catch (error) {
+        console.error('Error loading pane order:', error);
+    }
+}
+
+// The setupSortablePanes function is already called in the main DOMContentLoaded event listener
